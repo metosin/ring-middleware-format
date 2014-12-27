@@ -6,6 +6,7 @@
 - Fix transit with wrap-restful-response
 - Nil response body results in empty response body, instead of encoded nil
   e.g. json response "null"
+- Added `predicate` option to wrap-restful-params
 - Updated dependencies:
 ```
 [ring "1.3.2"] is available but we use "1.3.0"

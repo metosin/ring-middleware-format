@@ -225,3 +225,14 @@
         resp (custom-restful-echo req)]
     (is (.contains (get-in resp [:headers "Content-Type"]) "text/foo"))
     (is (< 2 (Integer/parseInt (get-in resp [:headers "Content-Length"]))))))
+
+(def restful-echo-pred
+  (wrap-restful-response identity :predicate (fn [_ resp]
+                                               (::serializable? resp))))
+
+(deftest custom-predicate
+  (let [req {:body {:foo "bar"}}
+        resp-non-serialized (restful-echo-pred (assoc req ::serializable? false))
+        resp-serialized     (restful-echo-pred (assoc req ::serializable? true))]
+    (is (map? (:body resp-non-serialized)))
+    (is (instance? java.io.BufferedInputStream (:body resp-serialized) nil))))
