@@ -9,12 +9,12 @@
             :comments "same as Clojure"}
   :dependencies [[org.clojure/clojure "1.6.0"]
                  [org.clojure/core.memoize "0.5.6"]
-                 [ring "1.3.0"]
-                 [cheshire "5.3.1"]
-                 [org.clojure/tools.reader "0.8.5"]
-                 [com.ibm.icu/icu4j "53.1"]
+                 [ring "1.3.2"]
+                 [cheshire "5.4.0"]
+                 [org.clojure/tools.reader "0.8.13"]
+                 [com.ibm.icu/icu4j "54.1.1"]
                  [clj-yaml "0.4.0"]
-                 [com.cognitect/transit-clj "0.8.247"]]
+                 [com.cognitect/transit-clj "0.8.259"]]
   :plugins [[codox "0.8.10"]]
   :codox {:src-dir-uri "http://github.com/metosin/ring-middleware-format/blob/master/"
           :src-linenum-anchor-prefix "L"

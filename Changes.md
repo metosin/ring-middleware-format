@@ -1,5 +1,18 @@
 # Changes for ring-middleware-format
 
+## 0.5.0
+
+- Forked by Metosin
+- Fix transit with wrap-restful-response
+- Updated dependencies:
+```
+[ring "1.3.2"] is available but we use "1.3.0"
+[cheshire "5.4.0"] is available but we use "5.3.1"
+[org.clojure/tools.reader "0.8.13"] is available but we use "0.8.5"
+[com.ibm.icu/icu4j "54.1.1"] is available but we use "53.1"
+[com.cognitect/transit-clj "0.8.259"] is available but we use "0.8.247"
+```
+
 ## 0.4.0
 ### Features
  - Support for binary encodings
@@ -7,7 +20,7 @@
 
 ### Bugfixes
  - Uses *Accept-Charset* header to choose response charset
- 
+
 ### Other
  - Easier customizing of error handlers for `format` namespace
 
@@ -33,7 +46,7 @@
   - `wrap-format-response` encodes the body with the first format
   (`:json` by default) when unable to find an encoder matching the
   request instead of returning **306** HTTP error code
-  
+
 ### Features
   - Added custom error handling
   - Added a `ring.middleware.format` namespace for simplified usage
@@ -55,7 +68,7 @@
 ## 0.2.3
 ### Bugfixes
   - Fixed bug with long request bodies when guessing character encoding
-  
+
 ## 0.2.2
 ### Bugfixes
   - Fixed bug with character encoding guessing
