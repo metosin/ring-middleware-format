@@ -1,6 +1,6 @@
 # Changes for ring-middleware-format
 
-## 0.5.0
+## 0.5.0 (27.12.2014)
 
 - Forked by Metosin
 - Fix transit with wrap-restful-response
