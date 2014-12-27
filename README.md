@@ -1,6 +1,6 @@
 # ring-middleware-format #
 
-[![Continuous Integration status](https://secure.travis-ci.org/ngrunwald/ring-middleware-format.png)](http://travis-ci.org/ngrunwald/ring-middleware-format)
+[![Continuous Integration status](https://secure.travis-ci.org/metosin/ring-middleware-format.png)](http://travis-ci.org/metosin/ring-middleware-format)
 
 This is a set of middlewares that can be used to deserialize parameters sent in the :body of requests and serialize a Clojure data structure in the :body of a response to some string or binary representation. It natively handles JSON, YAML, Transit over JSON or Msgpack and Clojure (edn) but it can easily be extended to other custom formats, both string and binary. It is intended for the creation of RESTful APIs that do the right thing by default but are flexible enough to handle most special cases.
 
@@ -23,7 +23,7 @@ Add this to your dependencies in `project.clj`.
 
 ## API Documentation ##
 
-Full [API documentation](http://ngrunwald.github.com/ring-middleware-format) is available.
+Full [API documentation](http://metosin.github.com/ring-middleware-format) is available.
 
 ## Summary ##
 
@@ -62,7 +62,7 @@ Please note the default JSON and YAML decoder do not keywordize their output key
 (wrap-restful-format handler :formats [:json-kw :edn :yaml-kw :yaml-in-html :transit-json :transit-msgpack])
 ```
 
-See also [wrap-restful-format](http://ngrunwald.github.com/ring-middleware-format/ring.middleware.format.html#var-wrap-restful-format) docstring for help on customizing error handling.
+See also [wrap-restful-format](http://metosin.github.com/ring-middleware-format/ring.middleware.format.html#var-wrap-restful-format) docstring for help on customizing error handling.
 
 ## Usage ##
 
@@ -135,6 +135,7 @@ This module aims to be both easy to use and easy to extend to new formats. Howev
 
 ## License ##
 
+Copyright (C) 2014 Metosin Oy<br>
 Copyright (C) 2011, 2012, 2013, 2014 Nils Grunwald
 
 Distributed under the Eclipse Public License, the same as Clojure.

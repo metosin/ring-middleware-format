@@ -1,8 +1,8 @@
-(defproject ring-middleware-format "0.4.1-SNAPSHOT"
+(defproject metosin/ring-middleware-format "0.5.0-SNAPSHOT"
   :description "Ring middleware for parsing parameters and emitting
   responses in various formats (mainly JSON, YAML and Transit out of
   the box)"
-  :url "https://github.com/ngrunwald/ring-middleware-format"
+  :url "https://github.com/metosin/ring-middleware-format"
   :license {:name "Eclipse Public License - v 1.0"
             :url "http://www.eclipse.org/legal/epl-v10.html"
             :distribution :repo
@@ -16,6 +16,6 @@
                  [clj-yaml "0.4.0"]
                  [com.cognitect/transit-clj "0.8.247"]]
   :plugins [[codox "0.8.10"]]
-  :codox {:src-dir-uri "http://github.com/ngrunwald/ring-middleware-format/blob/master/"
+  :codox {:src-dir-uri "http://github.com/metosin/ring-middleware-format/blob/master/"
           :src-linenum-anchor-prefix "L"
           :defaults {:doc/format :markdown}})
