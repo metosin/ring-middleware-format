@@ -8,7 +8,7 @@ This is a set of middlewares that can be used to deserialize parameters sent in 
 
 Latest stable version:
 
-[![Clojars Project](http://clojars.org/ring-middleware-format/latest-version.svg)](http://clojars.org/ring-middleware-format)
+[![Clojars Project](http://clojars.org/metosin/ring-middleware-format/latest-version.svg)](http://clojars.org/metosin/ring-middleware-format)
 
 Add this to your dependencies in `project.clj`.
 
