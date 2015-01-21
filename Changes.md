@@ -1,5 +1,10 @@
 # Changes for ring-middleware-format
 
+## 0.6.0 (x.x.2015)
+
+- All wrap-\* functions now take options as optional map instead of
+keyword params.
+
 ## 0.5.0 (27.12.2014)
 
 - Forked by Metosin

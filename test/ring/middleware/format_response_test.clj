@@ -46,7 +46,7 @@
 (deftest format-json-prettily
   (let [body {:foo "bar"}
         req {:body body}
-        resp ((wrap-json-response identity :pretty true) req)]
+        resp ((wrap-json-response identity {:pretty true}) req)]
     (is (.contains (slurp (:body resp)) "\n "))))
 
 (deftest returns-correct-charset
@@ -182,10 +182,10 @@
 
 (def safe-restful-echo
   (wrap-restful-response echo-with-default-body
-                         :handle-error (fn [_ _ _] {:status 500})
-                         :formats
-                         [(make-encoder (fn [_] (throw (RuntimeException. "Memento mori")))
-                                        "foo/bar")]))
+                         {:handle-error (fn [_ _ _] {:status 500})
+                          :formats
+                          [(make-encoder (fn [_] (throw (RuntimeException. "Memento mori")))
+                                         "foo/bar")]}))
 
 (deftest format-hashmap-to-preferred
   (let [ok-accept "application/edn, application/json;q=0.5"
@@ -216,9 +216,9 @@
 
 (def custom-restful-echo
   (wrap-restful-response identity
-                         :formats [{:encoder (constantly "foobar")
-                                    :enc-type {:type "text"
-                                               :sub-type "foo"}}]))
+                         {:formats [{:encoder (constantly "foobar")
+                                     :enc-type {:type "text"
+                                                :sub-type "foo"}}]}))
 
 (deftest format-custom-restful-hashmap
   (let [req {:body {:foo "bar"} :headers {"accept" "text/foo"}}
@@ -227,8 +227,8 @@
     (is (< 2 (Integer/parseInt (get-in resp [:headers "Content-Length"]))))))
 
 (def restful-echo-pred
-  (wrap-restful-response identity :predicate (fn [_ resp]
-                                               (::serializable? resp))))
+  (wrap-restful-response identity {:predicate (fn [_ resp]
+                                                (::serializable? resp))}))
 
 (deftest custom-predicate
   (let [req {:body {:foo "bar"}}
