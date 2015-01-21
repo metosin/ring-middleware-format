@@ -15,11 +15,11 @@
 
 (def restful-echo-json
   (wrap-restful-format (fn [req] (assoc req :body (body-param-vals req)))
-                       :formats [:json-kw]))
+                       {:formats [:json-kw]}))
 
 (def restful-echo-yaml
   (wrap-restful-format (fn [req] (assoc req :body (body-param-vals req)))
-                       :formats [:yaml-kw]))
+                       {:formats [:yaml-kw]}))
 
 (deftest test-restful-round-trip
   (let [ok-accept "application/edn"
