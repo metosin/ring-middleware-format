@@ -260,6 +260,6 @@
             (if-let [wrapper (if
                               (fn? format) format
                               (format-wrappers (keyword format)))]
-              (wrapper h {:handle-error handle-error})
+              (wrapper h (merge {:handle-error handle-error} (get opts format)))
               h))
           handler formats))

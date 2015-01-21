@@ -329,18 +329,19 @@
                            :charset nil
                            :handle-error handle-error})))
 
-(def ^:no-doc format-encoders
-  {:json (make-encoder json/generate-string "application/json")
-   :json-kw (make-encoder json/generate-string "application/json")
-   :edn (make-encoder generate-native-clojure "application/edn")
-   :clojure (make-encoder generate-native-clojure "application/clojure")
-   :yaml (make-encoder yaml/generate-string "application/x-yaml")
-   :yaml-kw (make-encoder yaml/generate-string "application/x-yaml")
-   :yaml-in-html (make-encoder wrap-yaml-in-html "text/html")
-   :transit-json (make-encoder (make-transit-encoder :json {})
-                               "application/transit+json" :binary)
-   :transit-msgpack (make-encoder (make-transit-encoder :msgpack {})
-                                  "application/transit+msgpack" :binary)})
+(def ^:no-doc format-encoders [t opts]
+  (case t
+    :json (make-encoder json/generate-string "application/json")
+    :json-kw (make-encoder json/generate-string "application/json")
+    :edn (make-encoder generate-native-clojure "application/edn")
+    :clojure (make-encoder generate-native-clojure "application/clojure")
+    :yaml (make-encoder yaml/generate-string "application/x-yaml")
+    :yaml-kw (make-encoder yaml/generate-string "application/x-yaml")
+    :yaml-in-html (make-encoder wrap-yaml-in-html "text/html")
+    :transit-json (make-encoder (make-transit-encoder :json opts)
+                                "application/transit+json" :binary)
+    :transit-msgpack (make-encoder (make-transit-encoder :msgpack opts)
+                                   "application/transit+msgpack" :binary)))
 
 (defn wrap-restful-response
   "Wrapper that tries to do the right thing with the response *:body*
@@ -353,12 +354,13 @@
                :or {handle-error default-handle-error
                     predicate serializable?
                     charset default-charset-extractor
-                    formats [:json :yaml :edn :clojure :yaml-in-html :transit-json :transit-msgpack]}}]]
+                    formats [:json :yaml :edn :clojure :yaml-in-html :transit-json :transit-msgpack]}
+               :as opts}]]
   (let [encoders (for [format formats
                        :when format
                        :let [encoder (if (map? format)
                                        format
-                                       (format-encoders (keyword format)))]
+                                       (format-encoders (keyword format) (get opts (keyword format))))]
                        :when encoder]
                    encoder)]
     (wrap-format-response handler
