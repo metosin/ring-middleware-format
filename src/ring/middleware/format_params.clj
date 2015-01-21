@@ -255,7 +255,8 @@
    more details."
   [handler & [{:keys [handle-error formats]
                :or {handle-error default-handle-error
-                    formats [:json :edn :yaml :transit-msgpack :transit-json]}}]]
+                    formats [:json :edn :yaml :transit-msgpack :transit-json]}
+               :as opts}]]
   (reduce (fn [h format]
             (if-let [wrapper (if
                               (fn? format) format

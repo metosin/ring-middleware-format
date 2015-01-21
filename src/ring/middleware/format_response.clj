@@ -329,7 +329,7 @@
                            :charset nil
                            :handle-error handle-error})))
 
-(def ^:no-doc format-encoders [t opts]
+(defn ^:no-doc format-encoders [t opts]
   (case t
     :json (make-encoder json/generate-string "application/json")
     :json-kw (make-encoder json/generate-string "application/json")
