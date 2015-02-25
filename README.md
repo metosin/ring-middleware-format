@@ -133,7 +133,7 @@ This module aims to be both easy to use and easy to extend to new formats. Howev
 
 ## License ##
 
-Copyright (C) 2014 Metosin Oy<br>
+Copyright © 2014-2015 [Metosin Oy](http://www.metosin.fi)<br>
 Copyright (C) 2011, 2012, 2013, 2014 Nils Grunwald
 
 Distributed under the Eclipse Public License, the same as Clojure.
