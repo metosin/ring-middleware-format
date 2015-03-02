@@ -1,4 +1,4 @@
-(defproject metosin/ring-middleware-format "0.6.0-SNAPSHOT"
+(defproject metosin/ring-middleware-format "0.6.0"
   :description "Ring middleware for parsing parameters and emitting
   responses in various formats (mainly JSON, YAML and Transit out of
   the box)"
