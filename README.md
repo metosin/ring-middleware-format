@@ -119,7 +119,7 @@ For exemple, this will cause all json formatted responses to be encoded in *iso-
 
 ```clojure
 (-> handler
-  (wrap-json-response :charset "ISO-8859-1"))
+  (wrap-json-response {:charset "ISO-8859-1"}))
 ```
 + You can implement the wrapper from scratch by using either or both `wrap-format-params` and `wrap-format-response`. For now, see the docs of each and how the other formats were implemented for help doing this.
 

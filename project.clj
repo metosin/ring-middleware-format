@@ -20,4 +20,5 @@
           :src-linenum-anchor-prefix "L"
           :defaults {:doc/format :markdown}}
   :profiles {:1.7 {:dependencies [[org.clojure/clojure "1.7.0-alpha4"]]}}
-  :aliases {"all" ["with-profile" "dev:dev,1.7"]})
+  :aliases {"all" ["with-profile" "dev:dev,1.7"]
+            "test-ancient" ["test"]})
