@@ -8,16 +8,17 @@
             :distribution :repo
             :comments "same as Clojure"}
   :dependencies [[org.clojure/clojure "1.6.0"]
-                 [org.clojure/core.memoize "0.5.6"]
+                 [org.clojure/core.memoize "0.5.7"]
                  [ring "1.3.2"]
                  [cheshire "5.4.0"]
-                 [org.clojure/tools.reader "0.8.13"]
+                 [org.clojure/tools.reader "0.8.15"]
                  [com.ibm.icu/icu4j "54.1.1"]
                  [clj-yaml "0.4.0"]
-                 [com.cognitect/transit-clj "0.8.259"]]
+                 [com.cognitect/transit-clj "0.8.269"]]
   :plugins [[codox "0.8.10"]]
   :codox {:src-dir-uri "http://github.com/metosin/ring-middleware-format/blob/master/"
           :src-linenum-anchor-prefix "L"
           :defaults {:doc/format :markdown}}
   :profiles {:1.7 {:dependencies [[org.clojure/clojure "1.7.0-alpha4"]]}}
-  :aliases {"all" ["with-profile" "dev:dev,1.7"]})
+  :aliases {"all" ["with-profile" "dev:dev,1.7"]
+            "test-ancient" ["test"]})

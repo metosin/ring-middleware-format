@@ -1,9 +1,15 @@
 # Changes for ring-middleware-format
 
-## 0.6.0 (x.x.2015)
+## 0.6.0 (2.3.2015)
 
-- All wrap-\* functions now take options as optional map instead of
+- **Breaking change**: All wrap-\* functions now take options as optional map instead of
 keyword params.
+- Updated dependencies:
+```
+[org.clojure/core.memoize "0.5.7"] is available but we use "0.5.6"
+[org.clojure/tools.reader "0.8.15"] is available but we use "0.8.13"
+[com.cognitect/transit-clj "0.8.269"] is available but we use "0.8.259"
+```
 
 ## 0.5.0 (27.12.2014)
 
