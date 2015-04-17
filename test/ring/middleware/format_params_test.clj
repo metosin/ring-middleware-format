@@ -171,8 +171,8 @@
     (let [req {:body body
                :content-type content-type}
           resp ((wrap-restful-params identity
-                                     :formats [format]
-                                     :handle-error (constantly {:status 999}))
+                                     {:formats [format]
+                                      :handle-error (constantly {:status 999})})
                 req)]
       (= 999 (:status resp)))
     :json "application/json" "{:a 1}"
