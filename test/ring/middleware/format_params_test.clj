@@ -1,9 +1,7 @@
 (ns ring.middleware.format-params-test
   (:use [clojure.test]
         [ring.middleware.format-params])
-  (:require [cheshire.core :as json]
-            [clj-yaml.core :as yaml]
-            [cognitect.transit :as transit]
+  (:require [cognitect.transit :as transit]
             [clojure.java.io :as io])
   (:import [java.io ByteArrayInputStream ByteArrayOutputStream]))
 
@@ -68,9 +66,9 @@
              :body (stream "{:foo #=(java.util.Date.)}")
              :params {"id" 3}}]
     (try
-      (let [resp (clojure-echo req)]
+      (let [_ (clojure-echo req)]
         (is false "Eval in reader permits arbitrary code execution."))
-      (catch Exception ignored))))
+      (catch Exception _))))
 
 (deftest no-body-with-clojure-content-type
   (let [req {:content-type "application/clojure; charset=UTF-8"
@@ -177,3 +175,29 @@
       (= 999 (:status resp)))
     :json "application/json" "{:a 1}"
     :edn "application/edn" "{\"a\": 1}"))
+
+;;
+;; Transit options
+;;
+
+(defrecord Point [x y])
+
+(def readers
+  {"Point" (transit/read-handler (fn [[x y]] (Point. x y)))})
+
+(def custom-transit-json-echo
+  (wrap-transit-json-params identity {:handlers readers}))
+
+(def custom-restful-transit-json-echo
+  (wrap-restful-params identity {:transit-json {:handlers readers}}))
+
+(deftest read-custom-transit
+  (let [body "[\"^ \", \"~:p\", [\"~#Point\",[1,2]]]"
+        parsed-req (custom-transit-json-echo {:content-type "application/transit+json"
+                                              :body (stream body)})
+        parsed-req2 (custom-restful-transit-json-echo {:content-type "application/transit+json"
+                                                       :body (stream body)})]
+    (testing "wrap-transit-json-params, transit options"
+      (is (= {:p (Point. 1 2)} (:params parsed-req) (:body-params parsed-req))))
+    (testing "wrap-restful-params, transit options"
+      (is (= {:p (Point. 1 2)} (:params parsed-req2) (:body-params parsed-req2))))))

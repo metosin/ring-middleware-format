@@ -2,6 +2,8 @@
 
 ## x.x.x (x.x.2015)
 
+- **Breaking**: Options map from middlewares is passed directly to the make-encoder/decoder (affects
+transit options)
 - Updated dependencies:
 ```
 [org.clojure/tools.reader "0.9.2"] is available but we use "0.8.15"
