@@ -1,5 +1,10 @@
 # Changes for ring-middleware-format
 
+## 0.7.0-SNAPSHOT (x.x.2015)
+
+- **Breaking**: Options map from middlewares is passed directly to the make-encoder/decoder (affects
+transit options)
+
 ## 0.6.0 (2.3.2015)
 
 - **Breaking change**: All wrap-\* functions now take options as optional map instead of

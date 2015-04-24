@@ -246,3 +246,25 @@
         resp-serialized     (restful-echo-pred (assoc req ::serializable? true))]
     (is (map? (:body resp-non-serialized)))
     (is (instance? java.io.BufferedInputStream (:body resp-serialized) nil))))
+
+;;
+;; Transit options
+;;
+
+(defrecord Point [x y])
+
+(def writers
+  {Point (transit/write-handler (constantly "Point") (fn [p] [(:x p) (:y p)]))})
+
+(def custom-transit-echo
+  (wrap-transit-json-response identity {:handlers writers}))
+
+(def custom-restful-transit-echo
+  (wrap-restful-response identity {:transit-json {:handlers writers}}))
+
+(deftest write-custom-transit
+  (let [req {:body (Point. 1 2)}
+        resp (custom-transit-echo req)
+        resp2 (custom-restful-transit-echo (assoc req :headers {"accept" "application/transit+json"}))]
+    (is (= "[\"~#Point\",[1,2]]" (slurp (:body resp))))
+    (is (= "[\"~#Point\",[1,2]]" (slurp (:body resp2)))) ))

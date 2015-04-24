@@ -201,7 +201,7 @@
 (defn ^:no-doc make-transit-decoder
   [fmt opts]
   (fn [in]
-    (let [rdr (transit/reader in fmt opts)]
+    (let [rdr (transit/reader in fmt (select-keys opts [:handlers :default-handler]))]
       (transit/read rdr))))
 
 (def ^:no-doc transit-json-request?
@@ -211,14 +211,14 @@
   "Handles body params in transit format over **JSON**. You can use an *:options* key to pass
    a map with *:handlers* and *:default-handler* to transit-clj. See [[wrap-format-params]]
    for details."
-  [handler & [{:keys [predicate decoder charset binary? handle-error options]
+  [handler & [{:keys [predicate decoder binary? handle-error]
                :or {predicate transit-json-request?
-                    options {}
                     binary? true
-                    handle-error default-handle-error}}]]
+                    handle-error default-handle-error}
+               :as opts}]]
   (wrap-format-params handler
                       {:predicate predicate
-                       :decoder (or decoder (make-transit-decoder :json options))
+                       :decoder (or decoder (make-transit-decoder :json opts))
                        :binary? binary?
                        :handle-error handle-error}))
 
@@ -228,14 +228,14 @@
 (defn wrap-transit-msgpack-params
   "Handles body params in transit format over **msgpack**. You can use an *:options* key to pass
    a map with *:handlers* and *:default-handler* to transit-clj. See [[wrap-format-params]] for details."
-  [handler & [{:keys [predicate decoder charset binary? handle-error options]
+  [handler & [{:keys [predicate decoder charset binary? handle-error]
                :or {predicate transit-msgpack-request?
-                    options {}
                     binary? true
-                    handle-error default-handle-error}}]]
+                    handle-error default-handle-error}
+               :as opts}]]
   (wrap-format-params handler
                       {:predicate predicate
-                       :decoder (or decoder (make-transit-decoder :msgpack options))
+                       :decoder (or decoder (make-transit-decoder :msgpack opts))
                        :binary? binary?
                        :handle-error handle-error}))
 

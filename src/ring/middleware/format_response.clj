@@ -293,7 +293,7 @@
           full-fmt (if (and (= fmt :json) verbose)
                      :json-verbose
                      fmt)
-          wrt (transit/writer out full-fmt options)]
+          wrt (transit/writer out full-fmt (select-keys options [:handlers]))]
       (transit/write wrt data)
       (.toByteArray out))))
 
@@ -303,7 +303,7 @@
   [handler & [{:keys [encoder type options]
                :or {type "application/transit+json"}
                :as opts}]]
-  (let [encoder (or encoder (make-transit-encoder :json options))]
+  (let [encoder (or encoder (make-transit-encoder :json opts))]
     (wrap-format-response handler
                           (merge
                             {:encoders     [(make-encoder encoder type :binary)]
@@ -316,7 +316,7 @@
   [handler & [{:keys [encoder type options]
                :or {type "application/transit+msgpack"}
                :as opts}]]
-  (let [encoder (or encoder (make-transit-encoder :msgpack options))]
+  (let [encoder (or encoder (make-transit-encoder :msgpack opts))]
     (wrap-format-response handler
                           (merge
                             {:encoders     [(make-encoder encoder type :binary)]
