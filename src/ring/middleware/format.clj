@@ -3,7 +3,7 @@
              [format-params :as par]
              [format-response :as res]]))
 
-(defn wrap-restful-format
+(defn wrap-formats
   "Wrapper that tries to do the right thing with the request and
    response, providing a solid basis for a RESTful API. It will
    deserialize the request and serialize the response depending on
@@ -16,12 +16,8 @@
    or the response encoding with *:response-error-handler*. See
    [[ring.middleware.format-params/wrap-format-params]] and
    [[ring.middleware.format-response/wrap-format-response]] for details"
-  [handler & [{:keys [formats response-error-handler request-error-handler response-opts params-opts]
-               :or {formats [:json :edn :yaml :yaml-in-html
-                             :transit-msgpack :transit-json]
-                    response-error-handler res/default-handle-error
-                    request-error-handler par/default-handle-error}
-               :as options}]]
+  [handler & [{:keys [response-opts params-opts]
+               :as opts}]]
   (-> handler
-      (par/wrap-restful-params (merge {:formats formats :handle-error request-error-handler} params-opts))
-      (res/wrap-restful-response (merge {:formats formats :handle-error response-error-handler} response-opts))))
+      (par/wrap-format-params (merge opts params-opts))
+      (res/wrap-format-response (merge opts response-opts))))

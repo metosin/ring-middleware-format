@@ -1,16 +1,50 @@
 (ns ring.middleware.format-response-test
   (:require [clojure.test :refer :all]
+            [ring.middleware.formatters :refer :all]
             [ring.middleware.format-response :refer :all]
             [cheshire.core :as json]
             [clj-yaml.core :as yaml]
             [cognitect.transit :as transit])
   (:import [java.io ByteArrayInputStream]))
 
+(deftest can-encode?-accept-any-type
+  (is (can-encode? {:enc-type {:type "foo" :sub-type "bar"}}
+                   {:type "*" :sub-type "*"})))
+
+(deftest can-encode?-accept-any-sub-type
+  (let [encoder {:enc-type {:type "foo" :sub-type "bar"}}]
+    (is (can-encode? encoder
+                     {:type "foo" :sub-type "*"}))
+    (is (not (can-encode? encoder
+                          {:type "foo" :sub-type "buzz"})))))
+
+(deftest can-encode?-accept-specific-type
+  (let [encoder {:enc-type {:type "foo" :sub-type "bar"}}]
+    (is (can-encode? encoder
+                     {:type "foo" :sub-type "bar"}))
+    (is (not (can-encode? encoder
+                          {:type "foo" :sub-type "buzz"})))))
+
+(deftest gives-preferred-encoder
+  (let [accept [{:type "text"
+                 :sub-type "*"}
+                {:type "application"
+                 :sub-type "json"
+                 :q 0.5}]
+        req {:headers {"accept" accept}}
+        html-encoder {:enc-type {:type "text" :sub-type "html"}}
+        json-encoder {:enc-type {:type "application" :sub-type "json"}}]
+    (is (= html-encoder (preferred-encoder [json-encoder html-encoder] req)))
+    (is (= json-encoder (preferred-encoder [json-encoder html-encoder] {})))
+    (is (nil? (preferred-encoder [{:enc-type {:type "application"
+                                              :sub-type "edn"}}]
+                                 req)))))
+
 (defn stream [s]
   (ByteArrayInputStream. (.getBytes s "UTF-8")))
 
 (def json-echo
-  (wrap-response identity {:encoders [:json-kw]}))
+  (wrap-format-response identity {:formats [:json-kw]}))
 
 (defn file-type [ct]
   (if-let [[_ x] (re-find #"^([^;]*)" ct)]
@@ -59,25 +93,25 @@
 (deftest format-json-prettily
   (let [body {:foo "bar"}
         req {:body body}
-        resp ((wrap-response identity {:encoders [:json-kw], :json-kw {:pretty true}}) req)]
+        resp ((wrap-format-response identity {:formats [:json-kw], :json-kw {:pretty true}}) req)]
     (is (.contains (slurp (:body resp)) "\n "))))
 
 (deftest returns-correct-charset
   (let [body {:foo "bârçï"}
         req {:body body :headers {"accept-charset" "utf8; q=0.8 , utf-16"}}
-        resp ((wrap-response identity {:encoders [:json-kw]}) req)]
+        resp ((wrap-format-response identity {:formats [:json-kw]}) req)]
     (is (= "utf-16" (charset (get-in resp [:headers "Content-Type"]))))
     (is (= 32 (Integer/parseInt (get-in resp [:headers "Content-Length"]))))))
 
 (deftest returns-utf8-by-default
   (let [body {:foo "bârçï"}
         req {:body body :headers {"accept-charset" "foo"}}
-        resp ((wrap-response identity {:encoders [:json-kw]}) req)]
+        resp ((wrap-format-response identity {:formats [:json-kw]}) req)]
     (is (= "utf-8" (charset (get-in resp [:headers "Content-Type"]))))
     (is (= 18 (Integer/parseInt (get-in resp [:headers "Content-Length"]))))))
 
 (def clojure-echo
-  (wrap-response identity {:encoders [:edn]}))
+  (wrap-format-response identity {:formats [:edn]}))
 
 (deftest format-clojure-hashmap
   (let [body {:foo "bar"}
@@ -88,7 +122,7 @@
     (is (< 2 (Integer/parseInt (get-in resp [:headers "Content-Length"]))))))
 
 (def yaml-echo
-  (wrap-response identity {:encoders [:yaml]}))
+  (wrap-format-response identity {:formats [:yaml]}))
 
 (deftest format-yaml-hashmap
   (let [body {:foo "bar"}
@@ -108,7 +142,7 @@
     (transit/read rdr)))
 
 (def transit-json-echo
-  (wrap-response identity {:encoders [:transit-json]}))
+  (wrap-format-response identity {:formats [:transit-json]}))
 
 (deftest format-transit-json-hashmap
   (let [body {:foo "bar"}
@@ -119,7 +153,7 @@
     (is (< 2 (Integer/parseInt (get-in resp [:headers "Content-Length"]))))))
 
 (def transit-msgpack-echo
-  (wrap-response identity {:encoders [:transit-msgpack]}))
+  (wrap-format-response identity {:formats [:transit-msgpack]}))
 
 (deftest format-transit-msgpack-hashmap
   (let [body {:foo "bar"}
@@ -129,73 +163,21 @@
     (is (= "application/transit+msgpack" (get-in resp [:headers "Content-Type"])))
     (is (< 2 (Integer/parseInt (get-in resp [:headers "Content-Length"]))))))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Content-Type parsing ;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(deftest can-encode?-accept-any-type
-  (is (can-encode? {:enc-type {:type "foo" :sub-type "bar"}}
-                   {:type "*" :sub-type "*"})))
-
-(deftest can-encode?-accept-any-sub-type
-  (let [encoder {:enc-type {:type "foo" :sub-type "bar"}}]
-    (is (can-encode? encoder
-                     {:type "foo" :sub-type "*"}))
-    (is (not (can-encode? encoder
-                          {:type "foo" :sub-type "buzz"})))))
-
-(deftest can-encode?-accept-specific-type
-  (let [encoder {:enc-type {:type "foo" :sub-type "bar"}}]
-    (is (can-encode? encoder
-                     {:type "foo" :sub-type "bar"}))
-    (is (not (can-encode? encoder
-                          {:type "foo" :sub-type "buzz"})))))
-
-(deftest orders-values-correctly
-  (let [accept "text/plain, */*, text/plain;level=1, text/*, text/*;q=0.1"]
-    (is (= (parse-accept-header accept)
-           (list {:type "text"
-                  :sub-type "plain"
-                  :parameter "level=1"
-                  :q 1.0}
-                 {:type "text"
-                  :sub-type "plain"
-                  :q 1.0}
-                 {:type "text"
-                  :sub-type "*"
-                  :q 1.0}
-                 {:type "*"
-                  :sub-type "*"
-                  :q 1.0}
-                 {:type "text"
-                  :sub-type "*"
-                  :q 0.1})))))
-
-(deftest gives-preferred-encoder
-  (let [accept [{:type "text"
-                 :sub-type "*"}
-                {:type "application"
-                 :sub-type "json"
-                 :q 0.5}]
-        req {:headers {"accept" accept}}
-        html-encoder {:enc-type {:type "text" :sub-type "html"}}
-        json-encoder {:enc-type {:type "application" :sub-type "json"}}]
-    (is (= html-encoder (preferred-encoder [json-encoder html-encoder] req)))
-    (is (= json-encoder (preferred-encoder [json-encoder html-encoder] {})))
-    (is (nil? (preferred-encoder [{:enc-type {:type "application"
-                                              :sub-type "edn"}}]
-                                 req)))))
-
 (defn echo-with-default-body [req] (assoc req :body (get req :body {})))
 
 (def restful-echo
-  (wrap-response echo-with-default-body))
+  (wrap-format-response echo-with-default-body))
+
+(defrecord SafeEncoder [name content-type]
+  FormatEncoder
+  (create-encoder [_ opts]
+    (fn [_ _]
+      (throw (RuntimeException. "Memento mori")))))
 
 (def safe-restful-echo
-  (wrap-response echo-with-default-body
-                         {:handle-error (fn [_ _ _] {:status 500})
-                          :encoders [(make-encoder (fn [_] (throw (RuntimeException. "Memento mori")))
-                                                  "foo/bar")]}))
+  (wrap-format-response echo-with-default-body
+                        {:handle-error (fn [_ _ _] {:status 500})
+                         :formats [(SafeEncoder. :safe "foo/bar")]}))
 
 (deftest format-hashmap-to-preferred
   (let [ok-accept "application/edn, application/json;q=0.5"
@@ -219,19 +201,20 @@
             resp (restful-echo req)]
         (is (= accept (file-type (get-in resp [:headers "Content-Type"]))))
         (is (< 2 (Integer/parseInt (get-in resp [:headers "Content-Length"]))))))
+
     (let [req {:body body}
           resp (restful-echo req)]
       (is (= "application/json" (file-type (get-in resp [:headers "Content-Type"]))))
       (is (< 2 (Integer/parseInt (get-in resp [:headers "Content-Length"])))))))
 
 (defrecord CustomEncoder [name content-type]
-  Encoder
+  FormatEncoder
   (create-encoder [_ _]
-    (constantly [(.getBytes "foobar") content-type])))
+    (fn [_ _]
+      [(.getBytes "foobar") content-type])))
 
 (def custom-restful-echo
-  (wrap-response identity
-                 {:encoders [(CustomEncoder. :custom "text/foo")]}))
+  (wrap-format-response identity {:formats [(CustomEncoder. :custom "text/foo")]}))
 
 (deftest format-custom-restful-hashmap
   (let [req {:body {:foo "bar"} :headers {"accept" "text/foo"}}
@@ -240,8 +223,8 @@
     (is (< 2 (Integer/parseInt (get-in resp [:headers "Content-Length"]))))))
 
 (def restful-echo-pred
-  (wrap-response identity {:predicate-fn (fn [_ resp]
-                                           (::serializable? resp))}))
+  (wrap-format-response identity {:predicate (fn [_ resp]
+                                               (::serializable? resp))}))
 
 (deftest custom-predicate
   (let [req {:body {:foo "bar"}}
@@ -260,14 +243,9 @@
   {Point (transit/write-handler (constantly "Point") (fn [p] [(:x p) (:y p)]))})
 
 (def custom-transit-echo
-  (wrap-response identity {:encoders [:transit-json], :transit-json {:handlers writers}}))
-
-(def custom-restful-transit-echo
-  (wrap-response identity {:transit-json {:handlers writers}}))
+  (wrap-format-response identity {:formats [:transit-json], :transit-json {:handlers writers}}))
 
 (deftest write-custom-transit
   (let [req {:body (Point. 1 2)}
-        resp (custom-transit-echo req)
-        resp2 (custom-restful-transit-echo (assoc req :headers {"accept" "application/transit+json"}))]
-    (is (= "[\"~#Point\",[1,2]]" (slurp (:body resp))))
-    (is (= "[\"~#Point\",[1,2]]" (slurp (:body resp2)))) ))
+        resp (custom-transit-echo req)]
+    (is (= "[\"~#Point\",[1,2]]" (slurp (:body resp))))))

@@ -9,6 +9,10 @@
   "Set of recognised charsets by the current JVM"
   (into #{} (map string/lower-case (.keySet (Charset/availableCharsets)))))
 
+;;
+;; Parse accept header
+;;
+
 (defn sort-by-check
   [by check headers]
   (sort-by by (fn [a b]
@@ -50,6 +54,10 @@
 (def parse-accept-header
   "Memoized form of [[parse-accept-header*]]"
   (lu parse-accept-header* {} :lu/threshold 500))
+
+;;
+;; Parse charset
+;;
 
 (defn preferred-charset
   "Returns an acceptable choice from a list of [*charset* *quality-score*]"
@@ -125,6 +133,10 @@
   (or
     (get-charset req)
     "utf-8"))
+
+;;
+;; Random
+;;
 
 (defn slurp-to-bytes
   ^bytes [^InputStream in]

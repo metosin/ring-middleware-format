@@ -9,7 +9,7 @@
   (ByteArrayInputStream. (.getBytes s "UTF-8")))
 
 (def json-echo
-  (wrap-params identity {:decoders [:json]}))
+  (wrap-format-params identity {:formats [:json]}))
 
 ;; stolen from ring-json-params to confirm compatibility
 
@@ -39,7 +39,7 @@
     (is (= {"foo" "bar"} (:body-params resp)))))
 
 (def yaml-echo
-  (wrap-params identity {:decoders [:yaml]}))
+  (wrap-format-params identity {:formats [:yaml]}))
 
 (deftest augments-with-yaml-content-type
   (let [req {:content-type "application/x-yaml; charset=UTF-8"
@@ -50,7 +50,7 @@
     (is (= {:foo "bar"} (:body-params resp)))))
 
 (def clojure-echo
-  (wrap-params identity {:decoders [:edn]}))
+  (wrap-format-params identity {:formats [:edn]}))
 
 (deftest augments-with-clojure-content-type
   (let [req {:content-type "application/clojure; charset=UTF-8"
@@ -98,7 +98,7 @@
     (io/input-stream (.toByteArray out))))
 
 (def transit-json-echo
-  (wrap-params identity {:decoders [:transit-json]}))
+  (wrap-format-params identity {:formats [:transit-json]}))
 
 (deftest augments-with-transit-json-content-type
   (let [req {:content-type "application/transit+json"
@@ -109,7 +109,7 @@
     (is (= {:foo "bar"} (:body-params resp)))))
 
 (def transit-msgpack-echo
-  (wrap-params identity {:decoders [:transit-msgpack]}))
+  (wrap-format-params identity {:formats [:transit-msgpack]}))
 
 (deftest augments-with-transit-msgpack-content-type
   (let [req {:content-type "application/transit+msgpack"
@@ -124,11 +124,10 @@
 ;;;;;;;;;;;;;;;;;;;;
 
 (def restful-echo
-  (wrap-params identity))
+  (wrap-format-params identity))
 
 (def safe-restful-echo
-  (wrap-params identity
-               {:handle-error (fn [_ _ _] {:status 500})}))
+  (wrap-format-params identity {:handle-error (fn [_ _ _] {:status 500})}))
 
 (deftest test-restful-params-wrapper
   (let [req {:content-type "application/clojure; charset=UTF-8"
@@ -152,15 +151,14 @@
 
 (deftest test-list-body-request
   (let [req {:content-type "application/json"
-             :body (ByteArrayInputStream.
-                    (.getBytes "[\"gregor\", \"samsa\"]"))}]
-    ((wrap-params
+             :body (ByteArrayInputStream. (.getBytes "[\"gregor\", \"samsa\"]"))}]
+    ((wrap-format-params
       (fn [{:keys [body-params]}] (is (= ["gregor" "samsa"] body-params)))
-      {:decoders [:json]})
+      {:formats [:json]})
      req)))
 
 (deftest test-optional-body
-  ((wrap-params
+  ((wrap-format-params
     (fn [request]
       (is (nil? (:body request)))))
    {:body nil}))
@@ -169,9 +167,9 @@
   (are [format content-type body]
     (let [req {:body (-> body .getBytes ByteArrayInputStream.)
                :content-type content-type}
-          resp ((wrap-params identity
-                                     {:decoders [format]
-                                      :handle-error (constantly {:status 999})})
+          resp ((wrap-format-params identity
+                                    {:formats [format]
+                                     :handle-error (constantly {:status 999})})
                 req)]
       (= 999 (:status resp)))
     :json "application/json" "{:a 1}"
@@ -187,18 +185,11 @@
   {"Point" (transit/read-handler (fn [[x y]] (Point. x y)))})
 
 (def custom-transit-json-echo
-  (wrap-params identity {:decoders [:transit-json], :transit-json {:handlers readers}}))
-
-(def custom-restful-transit-json-echo
-  (wrap-params identity {:transit-json {:handlers readers}}))
+  (wrap-format-params identity {:formats [:transit-json], :transit-json {:handlers readers}}))
 
 (deftest read-custom-transit
   (let [body "[\"^ \", \"~:p\", [\"~#Point\",[1,2]]]"
         parsed-req (custom-transit-json-echo {:content-type "application/transit+json"
-                                              :body (stream body)})
-        parsed-req2 (custom-restful-transit-json-echo {:content-type "application/transit+json"
-                                                       :body (stream body)})]
+                                              :body (stream body)})]
     (testing "wrap-transit-json-params, transit options"
-      (is (= {:p (Point. 1 2)} (:params parsed-req) (:body-params parsed-req))))
-    (testing "wrap-restful-params, transit options"
-      (is (= {:p (Point. 1 2)} (:params parsed-req2) (:body-params parsed-req2))))))
+      (is (= {:p (Point. 1 2)} (:params parsed-req) (:body-params parsed-req))))))
