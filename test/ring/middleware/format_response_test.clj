@@ -12,6 +12,19 @@
 (def json-echo
   (wrap-json-response identity))
 
+(defn file-type [ct]
+  (if-let [[_ x] (re-find #"^([^;]*)" ct)]
+    x))
+
+(defn charset [ct]
+  (if-let [[_ x] (re-find #"charset=(.*)$" ct)]
+    x))
+
+(deftest test-utils
+  (is (= "application/json" (file-type "application/json; charset=utf-8")))
+  (is (= "application/json" (file-type "application/json")))
+  (is (= "utf-8" (charset "application/json; charset=utf-8"))))
+
 (deftest noop-with-nil
   (let [body nil
         req {:body body}
@@ -40,7 +53,7 @@
         req {:body body}
         resp (json-echo req)]
     (is (= (json/generate-string body) (slurp (:body resp))))
-    (is (.contains (get-in resp [:headers "Content-Type"]) "application/json"))
+    (is (= "application/json" (file-type (get-in resp [:headers "Content-Type"]))))
     (is (< 2 (Integer/parseInt (get-in resp [:headers "Content-Length"]))))))
 
 (deftest format-json-prettily
@@ -53,14 +66,14 @@
   (let [body {:foo "bârçï"}
         req {:body body :headers {"accept-charset" "utf8; q=0.8 , utf-16"}}
         resp ((wrap-json-response identity) req)]
-    (is (.contains (get-in resp [:headers "Content-Type"]) "utf-16"))
+    (is (= "utf-16" (charset (get-in resp [:headers "Content-Type"]))))
     (is (= 32 (Integer/parseInt (get-in resp [:headers "Content-Length"]))))))
 
 (deftest returns-utf8-by-default
   (let [body {:foo "bârçï"}
         req {:body body :headers {"accept-charset" "foo"}}
         resp ((wrap-json-response identity) req)]
-    (is (.contains (get-in resp [:headers "Content-Type"]) "utf-8"))
+    (is (= "utf-8" (charset (get-in resp [:headers "Content-Type"]))))
     (is (= 18 (Integer/parseInt (get-in resp [:headers "Content-Length"]))))))
 
 (def clojure-echo
@@ -71,7 +84,7 @@
         req {:body body}
         resp (clojure-echo req)]
     (is (= body (read-string (slurp (:body resp)))))
-    (is (.contains (get-in resp [:headers "Content-Type"]) "application/edn"))
+    (is (= "application/edn" (file-type (get-in resp [:headers "Content-Type"]))))
     (is (< 2 (Integer/parseInt (get-in resp [:headers "Content-Length"]))))))
 
 (def yaml-echo
@@ -82,7 +95,7 @@
         req {:body body}
         resp (yaml-echo req)]
     (is (= (yaml/generate-string body) (slurp (:body resp))))
-    (is (.contains (get-in resp [:headers "Content-Type"]) "application/x-yaml"))
+    (is (= "application/x-yaml" (file-type (get-in resp [:headers "Content-Type"]))))
     (is (< 2 (Integer/parseInt (get-in resp [:headers "Content-Length"]))))))
 
 ;;;;;;;;;;;;;
@@ -102,7 +115,7 @@
         req {:body body}
         resp (transit-json-echo req)]
     (is (= body (read-transit :json (:body resp))))
-    (is (.contains (get-in resp [:headers "Content-Type"]) "application/transit+json"))
+    (is (= "application/transit+json" (get-in resp [:headers "Content-Type"])))
     (is (< 2 (Integer/parseInt (get-in resp [:headers "Content-Length"]))))))
 
 (def transit-msgpack-echo
@@ -113,7 +126,7 @@
         req {:body body}
         resp (transit-msgpack-echo req)]
     (is (= body (read-transit :msgpack (:body resp))))
-    (is (.contains (get-in resp [:headers "Content-Type"]) "application/transit+msgpack"))
+    (is (= "application/transit+msgpack" (get-in resp [:headers "Content-Type"])))
     (is (< 2 (Integer/parseInt (get-in resp [:headers "Content-Length"]))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -167,10 +180,8 @@
         req {:headers {"accept" accept}}
         html-encoder {:enc-type {:type "text" :sub-type "html"}}
         json-encoder {:enc-type {:type "application" :sub-type "json"}}]
-    (is (= (preferred-encoder [json-encoder html-encoder] req)
-           html-encoder))
-    (is (= (preferred-encoder [json-encoder html-encoder] {})
-           json-encoder))
+    (is (= html-encoder (preferred-encoder [json-encoder html-encoder] req)))
+    (is (= json-encoder (preferred-encoder [json-encoder html-encoder] {})))
     (is (nil? (preferred-encoder [{:enc-type {:type "application"
                                               :sub-type "edn"}}]
                                  req)))))
@@ -183,18 +194,17 @@
 (def safe-restful-echo
   (wrap-restful-response echo-with-default-body
                          {:handle-error (fn [_ _ _] {:status 500})
-                          :formats
-                          [(make-encoder (fn [_] (throw (RuntimeException. "Memento mori")))
-                                         "foo/bar")]}))
+                          :formats [(make-encoder (fn [_] (throw (RuntimeException. "Memento mori")))
+                                                  "foo/bar")]}))
 
 (deftest format-hashmap-to-preferred
   (let [ok-accept "application/edn, application/json;q=0.5"
         ok-req {:headers {"accept" ok-accept}}]
-    (is (= (get-in (restful-echo ok-req) [:headers "Content-Type"])
-           "application/edn; charset=utf-8"))
-    (is (.contains (get-in (restful-echo {:headers {"accept" "foo/bar"}})
-                           [:headers "Content-Type"])
-                   "application/json"))
+    (is (= "application/edn; charset=utf-8"
+           (get-in (restful-echo ok-req) [:headers "Content-Type"])))
+    (is (= "application/json"
+           (file-type (get-in (restful-echo {:headers {"accept" "foo/bar"}})
+                              [:headers "Content-Type"]))))
     (is (= 500 (get (safe-restful-echo {:headers {"accept" "foo/bar"}}) :status)))))
 
 (deftest format-restful-hashmap
@@ -207,23 +217,23 @@
                     "text/html"]]
       (let [req {:body body :headers {"accept" accept}}
             resp (restful-echo req)]
-        (is (.contains (get-in resp [:headers "Content-Type"]) accept))
+        (is (= accept (file-type (get-in resp [:headers "Content-Type"]))))
         (is (< 2 (Integer/parseInt (get-in resp [:headers "Content-Length"]))))))
     (let [req {:body body}
           resp (restful-echo req)]
-      (is (.contains (get-in resp [:headers "Content-Type"]) "application/json"))
+      (is (= "application/json" (file-type (get-in resp [:headers "Content-Type"]))))
       (is (< 2 (Integer/parseInt (get-in resp [:headers "Content-Length"])))))))
 
 (def custom-restful-echo
   (wrap-restful-response identity
-                         {:formats [{:encoder (constantly "foobar")
-                                     :enc-type {:type "text"
+                         {:formats [{:encoder  (constantly "foobar")
+                                     :enc-type {:type     "text"
                                                 :sub-type "foo"}}]}))
 
 (deftest format-custom-restful-hashmap
   (let [req {:body {:foo "bar"} :headers {"accept" "text/foo"}}
         resp (custom-restful-echo req)]
-    (is (.contains (get-in resp [:headers "Content-Type"]) "text/foo"))
+    (is (= "text/foo" (file-type (get-in resp [:headers "Content-Type"]))))
     (is (< 2 (Integer/parseInt (get-in resp [:headers "Content-Length"]))))))
 
 (def restful-echo-pred
