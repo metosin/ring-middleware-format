@@ -19,6 +19,6 @@
   :codox {:src-dir-uri "http://github.com/metosin/ring-middleware-format/blob/master/"
           :src-linenum-anchor-prefix "L"
           :defaults {:doc/format :markdown}}
-  :profiles {:1.7 {:dependencies [[org.clojure/clojure "1.7.0-alpha4"]]}}
+  :profiles {:1.7 {:dependencies [[org.clojure/clojure "1.7.0-beta1"]]}}
   :aliases {"all" ["with-profile" "dev:dev,1.7"]
             "test-ancient" ["test"]})
