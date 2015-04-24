@@ -6,8 +6,7 @@
             [clojure.string :as s]
             [cognitect.transit :as transit])
   (:use [clojure.core.memoize :only [lu]])
-  (:import [java.io File InputStream BufferedInputStream
-            ByteArrayOutputStream]
+  (:import [java.io File InputStream ByteArrayOutputStream]
            [java.nio.charset Charset]))
 
 (set! *warn-on-reflection* true)
@@ -31,7 +30,7 @@
   "Check whether encoder can encode to accepted-type.
   Accepted-type should have keys *:type* and *:sub-type* with appropriate
   values."
-  [{:keys [enc-type] :as encoder} {:keys [type sub-type] :as accepted-type}]
+  [{:keys [enc-type]} {:keys [type sub-type] :as accepted-type}]
   (or (= "*" type)
       (and (= (:type enc-type) type)
            (or (= "*" sub-type)
@@ -120,72 +119,6 @@
         (first))
    "utf-8"))
 
-(defn make-encoder
-  "Return a encoder map suitable for [[wrap-format-response.]]
-   f takes a string and returns an encoded string
-   type *Content-Type* of the encoded string
-   (make-encoder json/generate-string \"application/json\")"
-  ([encoder-fn content-type binary?]
-     {:encoder-fn encoder-fn
-      :enc-type (first (parse-accept-header content-type))
-      :binary? binary?})
-  ([encoder-fn content-type]
-     (make-encoder encoder-fn content-type false)))
-
-;;
-;; Encoders
-;;
-
-(defn make-json-encoder [{:keys [pretty]}]
-  (if pretty
-    #(json/generate-string % {:pretty pretty})
-    json/generate-string))
-
-(defn ^:no-doc make-clojure-encoder
-  [{:keys [hf]}]
-  (binding [*print-dup* (boolean hf)]
-    (fn [struct]
-      (pr-str struct))))
-
-(defn- wrap-html [handler]
-  (fn [body]
-    (str
-      "<html>\n<head></head>\n<body><div><pre>\n"
-      (handler body)
-      "</pre></div></body></html>")))
-
-(defn ^:no-doc make-yaml-encoder
-  [html _]
-  (cond-> yaml/generate-string
-          html wrap-html))
-
-(defn ^:no-doc make-transit-encoder
-  [fmt {:keys [verbose] :as options}]
-  (fn [data]
-    (let [out (ByteArrayOutputStream.)
-          full-fmt (if (and (= fmt :json) verbose)
-                     :json-verbose
-                     fmt)
-          wrt (transit/writer out full-fmt options)]
-      (transit/write wrt data)
-      (.toByteArray out))))
-
-(def ^:no-doc format-encoders
-  (array-map
-    :json            (make-encoder make-json-encoder "application/json")
-    :json-kw         (make-encoder make-json-encoder "application/json")
-    :edn             (make-encoder make-clojure-encoder "application/edn")
-    :clojure         (make-encoder make-clojure-encoder "application/clojure")
-    :yaml            (make-encoder (partial make-yaml-encoder false) "application/x-yaml")
-    :yaml-kw         (make-encoder (partial make-yaml-encoder false) "application/x-yaml")
-    :yaml-in-html    (make-encoder (partial make-yaml-encoder true) "text/html")
-    :transit-json    (make-encoder (partial make-transit-encoder :json) "application/transit+json" :binary)
-    :transit-msgpack (make-encoder (partial make-transit-encoder :msgpack) "application/transit+msgpack" :binary)))
-
-;;
-;; Utils
-;;
-
 (defn default-handle-error
   "Default error handling function used, which rethrows the Exception"
   [e _ _]
@@ -196,7 +129,7 @@
    Defaults to utf-8"
   [accept-charset]
   (let [possible-charsets (parse-charset-accepted accept-charset)]
-      (preferred-charset possible-charsets)))
+    (preferred-charset possible-charsets)))
 
 (def choose-charset
   "Memoized form of [[choose-charset*]]"
@@ -211,6 +144,125 @@
     "utf-8"))
 
 ;;
+;; Encoders
+;;
+
+(defprotocol Encoder
+  "Implementations should have at-least the following fields:
+  - name
+  - content-type
+
+  Following fields are added by the middleware:
+  - encoder, created by calling create-encoder with options
+  - enc-type, split content-type"
+  (create-encoder [_ options]
+    "Should return a function which takes in body and request,
+    and returns [body content-type], where body is
+    encoded body as a ByteArray (or something which can be coerced
+    to InputStream.)"))
+
+(defn encoder? [x]
+  (satisfies? Encoder x))
+
+(defn binary-encoder [encode-fn content-type _]
+  (fn [body _]
+    (let [body* (encode-fn body)]
+      [body* content-type])))
+
+(defn charset-encoder [encode-fn content-type
+                       {:keys [charset]
+                        :or {charset default-charset-extractor}}]
+  (fn [body req]
+    (let [^String char-enc (if (string? charset) charset (charset req))
+          ^String body-string (encode-fn body)
+          body* (.getBytes body-string char-enc)
+          ctype* (str content-type "; charset=" char-enc)]
+      [body* ctype*])))
+
+;;
+;; JSON
+;;
+
+(defrecord JsonEncoder [name content-type]
+  Encoder
+  (create-encoder [_ {:keys [pretty] :as opts}]
+    (let [encode-fn (if pretty
+                      #(json/generate-string % {:pretty pretty})
+                      json/generate-string)]
+      (charset-encoder encode-fn content-type opts))))
+
+;;
+;; Clojure / EDN
+;;
+
+(defn- wrap-print-dup [handler]
+  (fn [x]
+    (binding [*print-dup* true]
+      (handler x))))
+
+(defrecord ClojureEncoder [name content-type]
+  Encoder
+  (create-encoder [_ {:keys [hf] :as opts}]
+    (let [encode-fn (cond-> pr-str
+                            hf wrap-print-dup)]
+      (charset-encoder encode-fn content-type opts))))
+
+;;
+;; Yaml
+;;
+
+(defn- wrap-html [handler]
+  (fn [body]
+    (str
+      "<html>\n<head></head>\n<body><div><pre>\n"
+      (handler body)
+      "</pre></div></body></html>")))
+
+(defrecord YamlEncoder [name content-type html?]
+  Encoder
+  (create-encoder [_ opts]
+    (let [encode-fn (cond-> yaml/generate-string
+                            html? wrap-html)]
+      (charset-encoder encode-fn content-type opts))))
+
+;;
+;; Transit
+;;
+
+(defrecord TransitEncoder [name content-type fmt]
+  Encoder
+  (create-encoder [_ {:keys [verbose] :as opts}]
+    (binary-encoder
+      (fn [data]
+        (let [out (ByteArrayOutputStream.)
+              full-fmt (if (and (= fmt :json) verbose)
+                         :json-verbose
+                         fmt)
+              wrt (transit/writer out full-fmt (select-keys opts [:handlers]))]
+          (transit/write wrt data)
+          (.toByteArray out)))
+      content-type
+      opts)))
+
+;;
+;; Encoder list
+;;
+
+(def format-encoders
+  [(JsonEncoder. :json, "application/json")
+   (JsonEncoder. :json-kw, "application/json")
+   (ClojureEncoder. :edn, "application/edn")
+   (ClojureEncoder. :clojure, "application/clojure")
+   (YamlEncoder. :yaml "application/x-yaml" false)
+   (YamlEncoder. :yaml-kw "application/x-yaml" false)
+   (YamlEncoder. :yaml-in-html "text/html" true)
+   (TransitEncoder. :transit-json "application/transit+json" :json)
+   (TransitEncoder. :transit-msgpack "application/transit+msgpack" :msgpack)])
+
+(def format-encoders-map
+  (into {} (map (juxt :name identity) format-encoders)))
+
+;;
 ;; Middlewares
 ;;
 
@@ -218,46 +270,33 @@
   "Wraps a handler such that responses body to requests are formatted to
   the right format. If no *Accept* header is found, use the first encoder.
 
- + **:formats** list of either keywords of supported encoders
-                (in ring-middleware-format.format-response/format-encoders)
-                or encoders
- + **:predicate** is a predicate taking the request and response as
-                  arguments to test if serialization should be used
+ + **:encoders** list encoders, either Encoder instance of a keyword
+                 referring built-in Encoder
+ + **:predicate-fn** is a predicate taking the request and response as
+                     arguments to test if serialization should be used
  + **:charset** can be either a string representing a valid charset or a fn
                 taking the req as argument and returning a valid charset
                 (*utf-8* is strongly suggested)
  + **:handle-error** is a fn with a sig [exception request response]. Defaults
                      to just rethrowing the Exception"
-  [handler & [{:keys [formats predicate charset handle-error]
-               :or {formats (keys format-encoders)
-                    predicate serializable?
-                    handle-error default-handle-error
-                    charset default-charset-extractor}
+  [handler & [{:keys [encoders predicate-fn handle-error]
+               :or {encoders format-encoders
+                    predicate-fn serializable?
+                    handle-error default-handle-error}
                :as opts}]]
-  (let [encoders (for [format formats
-                       :when format
-                       :let [encoder (if (map? format)
-                                       format
-                                       (get format-encoders (keyword format)))
-                             encoder-fn (:encoder-fn encoder)]
-                       :when encoder]
-                   (assoc encoder :encoder (encoder-fn (get opts format))))]
+  (let [encoders (for [encoder encoders
+                       :let [encoder (if (keyword? encoder)
+                                       (get format-encoders-map encoder)
+                                       encoder)]
+                       :when (encoder? encoder)]
+                   (assoc encoder :encoder (create-encoder encoder (get opts (if (keyword? encoder) encoder (:name encoder))))
+                                  :enc-type (first (parse-accept-header (:content-type encoder)))))]
     (fn [req]
       (let [{:keys [body] :as response} (handler req)]
         (try
-          (if (predicate req response)
-            (let [{:keys [encoder enc-type binary?]} (or (preferred-encoder encoders req) (first encoders))
-                  [body* content-type]
-                  (if binary?
-                    (let [body* (encoder body)
-                          ctype (str (enc-type :type) "/" (enc-type :sub-type))]
-                      [body* ctype])
-                    (let [^String char-enc (if (string? charset) charset (charset req))
-                          ^String body-string (encoder body)
-                          body* (.getBytes body-string char-enc)
-                          ctype (str (enc-type :type) "/" (enc-type :sub-type)
-                                     "; charset=" char-enc)]
-                      [body* ctype]))
+          (if (predicate-fn req response)
+            (let [{:keys [encoder]} (or (preferred-encoder encoders req) (first encoders))
+                  [body* content-type] (encoder body req)
                   body-length (count body*)]
               (-> response
                   (assoc :body (io/input-stream body*))
