@@ -10,7 +10,7 @@
   (ByteArrayInputStream. (.getBytes s "UTF-8")))
 
 (def json-echo
-  (wrap-json-response identity))
+  (wrap-response identity {:formats [:json-kw]}))
 
 (defn file-type [ct]
   (if-let [[_ x] (re-find #"^([^;]*)" ct)]
@@ -59,25 +59,25 @@
 (deftest format-json-prettily
   (let [body {:foo "bar"}
         req {:body body}
-        resp ((wrap-json-response identity {:pretty true}) req)]
+        resp ((wrap-response identity {:formats [:json-kw], :json-kw {:pretty true}}) req)]
     (is (.contains (slurp (:body resp)) "\n "))))
 
 (deftest returns-correct-charset
   (let [body {:foo "bârçï"}
         req {:body body :headers {"accept-charset" "utf8; q=0.8 , utf-16"}}
-        resp ((wrap-json-response identity) req)]
+        resp ((wrap-response identity {:formats [:json-kw]}) req)]
     (is (= "utf-16" (charset (get-in resp [:headers "Content-Type"]))))
     (is (= 32 (Integer/parseInt (get-in resp [:headers "Content-Length"]))))))
 
 (deftest returns-utf8-by-default
   (let [body {:foo "bârçï"}
         req {:body body :headers {"accept-charset" "foo"}}
-        resp ((wrap-json-response identity) req)]
+        resp ((wrap-response identity {:formats [:json-kw]}) req)]
     (is (= "utf-8" (charset (get-in resp [:headers "Content-Type"]))))
     (is (= 18 (Integer/parseInt (get-in resp [:headers "Content-Length"]))))))
 
 (def clojure-echo
-  (wrap-clojure-response identity))
+  (wrap-response identity {:formats [:edn]}))
 
 (deftest format-clojure-hashmap
   (let [body {:foo "bar"}
@@ -88,7 +88,7 @@
     (is (< 2 (Integer/parseInt (get-in resp [:headers "Content-Length"]))))))
 
 (def yaml-echo
-  (wrap-yaml-response identity))
+  (wrap-response identity {:formats [:yaml]}))
 
 (deftest format-yaml-hashmap
   (let [body {:foo "bar"}
@@ -108,7 +108,7 @@
     (transit/read rdr)))
 
 (def transit-json-echo
-  (wrap-transit-json-response identity))
+  (wrap-response identity {:formats [:transit-json]}))
 
 (deftest format-transit-json-hashmap
   (let [body {:foo "bar"}
@@ -119,7 +119,7 @@
     (is (< 2 (Integer/parseInt (get-in resp [:headers "Content-Length"]))))))
 
 (def transit-msgpack-echo
-  (wrap-transit-msgpack-response identity))
+  (wrap-response identity {:formats [:transit-msgpack]}))
 
 (deftest format-transit-msgpack-hashmap
   (let [body {:foo "bar"}
@@ -189,10 +189,10 @@
 (defn echo-with-default-body [req] (assoc req :body (get req :body {})))
 
 (def restful-echo
-  (wrap-restful-response echo-with-default-body))
+  (wrap-response echo-with-default-body))
 
 (def safe-restful-echo
-  (wrap-restful-response echo-with-default-body
+  (wrap-response echo-with-default-body
                          {:handle-error (fn [_ _ _] {:status 500})
                           :formats [(make-encoder (fn [_] (throw (RuntimeException. "Memento mori")))
                                                   "foo/bar")]}))
@@ -225,10 +225,10 @@
       (is (< 2 (Integer/parseInt (get-in resp [:headers "Content-Length"])))))))
 
 (def custom-restful-echo
-  (wrap-restful-response identity
-                         {:formats [{:encoder  (constantly "foobar")
-                                     :enc-type {:type     "text"
-                                                :sub-type "foo"}}]}))
+  (wrap-response identity
+                 {:formats [{:encoder-fn (fn [_] (constantly "foobar"))
+                             :enc-type {:type     "text"
+                                        :sub-type "foo"}}]}))
 
 (deftest format-custom-restful-hashmap
   (let [req {:body {:foo "bar"} :headers {"accept" "text/foo"}}
@@ -237,8 +237,8 @@
     (is (< 2 (Integer/parseInt (get-in resp [:headers "Content-Length"]))))))
 
 (def restful-echo-pred
-  (wrap-restful-response identity {:predicate (fn [_ resp]
-                                                (::serializable? resp))}))
+  (wrap-response identity {:predicate (fn [_ resp]
+                                        (::serializable? resp))}))
 
 (deftest custom-predicate
   (let [req {:body {:foo "bar"}}
@@ -257,10 +257,10 @@
   {Point (transit/write-handler (constantly "Point") (fn [p] [(:x p) (:y p)]))})
 
 (def custom-transit-echo
-  (wrap-transit-json-response identity {:handlers writers}))
+  (wrap-response identity {:formats [:transit-json], :transit-json {:handlers writers}}))
 
 (def custom-restful-transit-echo
-  (wrap-restful-response identity {:transit-json {:handlers writers}}))
+  (wrap-response identity {:transit-json {:handlers writers}}))
 
 (deftest write-custom-transit
   (let [req {:body (Point. 1 2)}

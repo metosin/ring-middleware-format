@@ -2,6 +2,7 @@
 
 ## x.x.x (x.x.2015)
 
+- **Breaking**: Removed format specific middlewares. Renamed wrap-restful-* to just wrap-*.
 - **Breaking**: Options map from middlewares is passed directly to the make-encoder/decoder (affects
 transit options)
 - Updated dependencies:
