@@ -3,17 +3,11 @@
             [ring.util.response :as res]
             [clojure.java.io :as io]
             [clj-yaml.core :as yaml]
-            [clojure.string :as s]
-            [cognitect.transit :as transit])
-  (:use [clojure.core.memoize :only [lu]])
-  (:import [java.io File InputStream ByteArrayOutputStream]
-           [java.nio.charset Charset]))
+            [cognitect.transit :as transit]
+            [ring.middleware.format-utils :refer [parse-accept-header default-charset-extractor]])
+  (:import [java.io File InputStream ByteArrayOutputStream]))
 
 (set! *warn-on-reflection* true)
-
-(def available-charsets
-  "Set of recognised charsets by the current JVM"
-  (into #{} (map s/lower-case (.keySet (Charset/availableCharsets)))))
 
 (defn ^:no-doc serializable?
   "Predicate that returns true whenever the response body is non-nil, and not a
@@ -36,48 +30,6 @@
            (or (= "*" sub-type)
                (= (enc-type :sub-type) sub-type)))))
 
-(defn ^:no-doc sort-by-check
-  [by check headers]
-  (sort-by by (fn [a b]
-                (cond (= (= a check) (= b check)) 0
-                      (= a check) 1
-                      :else -1))
-           headers))
-
-(defn parse-accept-header*
-  "Parse Accept headers into a sorted sequence of maps.
-  \"application/json;level=1;q=0.4\"
-  => ({:type \"application\" :sub-type \"json\"
-       :q 0.4 :parameter \"level=1\"})"
-  [accept-header]
-  (->> (map (fn [val]
-              (let [[media-range & rest] (s/split (s/trim val) #";")
-                    type (zipmap [:type :sub-type]
-                                 (s/split (s/trim media-range) #"/"))]
-                (cond (nil? rest)
-                      (assoc type :q 1.0)
-                      (= (first (s/triml (first rest)))
-                         \q) ;no media-range params
-                      (assoc type :q
-                             (Double/parseDouble
-                              (second (s/split (first rest) #"="))))
-                      :else
-                      (assoc (if-let [q-val (second rest)]
-                               (assoc type :q
-                                      (Double/parseDouble
-                                       (second (s/split q-val #"="))))
-                               (assoc type :q 1.0))
-                        :parameter (s/trim (first rest))))))
-            (s/split accept-header #","))
-       (sort-by-check :parameter nil)
-       (sort-by-check :type "*")
-       (sort-by-check :sub-type "*")
-       (sort-by :q >)))
-
-(def parse-accept-header
-  "Memoized form of [[parse-accept-header*]]"
-  (lu parse-accept-header* {} :lu/threshold 500))
-
 (defn preferred-encoder
   "Return the encoder that encodes to the most preferred type.
   If the *Accept* header of the request is a *String*, assume it is
@@ -95,53 +47,10 @@
              encoder))
     (first encoders)))
 
-(defn parse-charset-accepted
-  "Parses an *accept-charset* string to a list of [*charset* *quality-score*]"
-  [v]
-  (let [segments (s/split v #",")
-        choices (for [segment segments
-                      :when (not (empty? segment))
-                      :let [[_ charset qs] (re-find #"([^;]+)(?:;\s*q\s*=\s*([0-9\.]+))?" segment)]
-                      :when charset
-                      :let [qscore (try
-                                     (Double/parseDouble (s/trim qs))
-                                     (catch Exception e 1))]]
-                  [(s/trim charset) qscore])]
-    choices))
-
-(defn preferred-charset
-  "Returns an acceptable choice from a list of [*charset* *quality-score*]"
-  [charsets]
-  (or
-   (->> (sort-by second charsets)
-        (filter (comp available-charsets first))
-        (first)
-        (first))
-   "utf-8"))
-
 (defn default-handle-error
   "Default error handling function used, which rethrows the Exception"
   [e _ _]
   (throw e))
-
-(defn choose-charset*
-  "Returns an useful charset from the accept-charset string.
-   Defaults to utf-8"
-  [accept-charset]
-  (let [possible-charsets (parse-charset-accepted accept-charset)]
-    (preferred-charset possible-charsets)))
-
-(def choose-charset
-  "Memoized form of [[choose-charset*]]"
-  (lu choose-charset* {} :lu/threshold 500))
-
-(defn default-charset-extractor
-  "Default charset extractor, which returns either *Accept-Charset*
-   header field or *utf-8*"
-  [request]
-  (if-let [accept-charset (get-in request [:headers "accept-charset"])]
-    (choose-charset accept-charset)
-    "utf-8"))
 
 ;;
 ;; Encoders
@@ -249,10 +158,10 @@
 ;;
 
 (def format-encoders
-  [(JsonEncoder. :json, "application/json")
-   (JsonEncoder. :json-kw, "application/json")
-   (ClojureEncoder. :edn, "application/edn")
-   (ClojureEncoder. :clojure, "application/clojure")
+  [(JsonEncoder. :json "application/json")
+   (JsonEncoder. :json-kw "application/json")
+   (ClojureEncoder. :edn "application/edn")
+   (ClojureEncoder. :clojure "application/clojure")
    (YamlEncoder. :yaml "application/x-yaml" false)
    (YamlEncoder. :yaml-kw "application/x-yaml" false)
    (YamlEncoder. :yaml-in-html "text/html" true)
