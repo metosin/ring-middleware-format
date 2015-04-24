@@ -168,11 +168,9 @@
  + **:charset** can be either a string representing a valid charset or a fn
                 taking the req as argument and returning a valid charset
                 (*utf-8* is strongly suggested)
- + **:binary?** if true *:charset* will be ignored and decoder will receive
-               an *InputStream*
  + **:handle-error** is a fn with a sig [exception request response]. Defaults
                      to just rethrowing the Exception"
-  [handler & [{:keys [predicate encoders charset binary? handle-error]}]]
+  [handler & [{:keys [predicate encoders charset handle-error]}]]
   (fn [req]
     (let [{:keys [headers body] :as response} (handler req)]
       (try
@@ -352,7 +350,7 @@
   See wrap-format-response for more details. Recognized formats are
   *:json*, *:json-kw*, *:edn* *:yaml*, *:yaml-in-html*, *:transit-json*,
   *:transit-msgpack*."
-  [handler & [{:keys [predicate handle-error formats charset binary?]
+  [handler & [{:keys [predicate handle-error formats charset]
                :or {handle-error default-handle-error
                     predicate serializable?
                     charset default-charset-extractor
@@ -368,6 +366,5 @@
     (wrap-format-response handler
                           {:predicate predicate
                           :encoders encoders
-                          :binary? binary?
                           :charset charset
                           :handle-error handle-error})))
