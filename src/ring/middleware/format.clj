@@ -16,8 +16,7 @@
    or the response encoding with *:response-error-handler*. See
    [[ring.middleware.format-params/wrap-format-params]] and
    [[ring.middleware.format-response/wrap-format-response]] for details"
-  [handler & [{:keys [response-opts params-opts]
-               :as opts}]]
+  [handler & [opts]]
   (-> handler
-      (par/wrap-format-params (merge opts params-opts))
-      (res/wrap-format-response (merge opts response-opts))))
+      (par/wrap-format-params opts)
+      (res/wrap-format-response opts)))

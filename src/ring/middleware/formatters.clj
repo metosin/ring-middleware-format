@@ -8,14 +8,8 @@
            [java.util.regex Pattern]
            [org.apache.commons.codec Decoder]))
 
-;;
-;; Protocols
-;;
-
 (defn make-formatter
-  "Creates an instance of formatter.
-
-   "
+  "Creates an instance of formatter."
   [{:keys [content-type decoder decode? encoder]}]
   {:pre [(string? content-type)
          (if decoder (and (fn? decoder) (fn? decode?)) true)
@@ -180,7 +174,7 @@
 
 (defmethod create-formatter :yaml-in-html [_ opts]
   (-> (yaml-formatter "text/html" (assoc opts :html? true))
-      (dissoc :decoder)))
+      (dissoc :decoder :decode?)))
 
 ;;
 ;; Transit
@@ -190,6 +184,7 @@
   "Transit formatter.
 
    Available options:
+   - :fmt - :json, :json-verbose or :msgpack
    - :reader-opts - passed to transit/reader
      - :handlers
      - :default-handler
@@ -197,11 +192,11 @@
      - :handlers
 
    Registered with following keys:
-   - :transit-json
-   - :transit-msgpack
+   - :transit-json - Defaults :fmt to :json (can be overriden with :fmt option)
+   - :transit-msgpack - Sets :fmt to :msgpack
 
    Check http://cognitect.github.io/transit-clj/ for more info."
-  [content-type fmt {:keys [verbose reader-opts writer-opts] :as opts}]
+  [content-type {:keys [fmt reader-opts writer-opts] :as opts}]
   (make-formatter
     {:content-type content-type
      :decoder (binary-decoder
@@ -211,27 +206,25 @@
      :decode? (regexp-predicate
                 (case fmt
                   :json #"^application/(vnd.+)?(x-)?transit\+json"
+                  :json-verbose #"^application/(vnd.+)?(x-)?transit\+json"
                   :msgpack #"^application/(vnd.+)?(x-)?transit\+msgpack"))
      :encoder (binary-encoder
                 (fn [data]
                   (let [out (ByteArrayOutputStream.)
-                        full-fmt (if (and (= fmt :json) verbose)
-                                   :json-verbose
-                                   fmt)
-                        wrt (transit/writer out full-fmt writer-opts)]
+                        wrt (transit/writer out fmt writer-opts)]
                     (transit/write wrt data)
                     (.toByteArray out)))
                 content-type
                 opts)}))
 
 (defmethod create-formatter :transit-json [_ opts]
-  (transit-formatter "application/transit+json" :json opts))
+  (transit-formatter "application/transit+json" (merge {:fmt :json} opts)))
 
 (defmethod create-formatter :transit-msgpack [_ opts]
-  (transit-formatter "application/transit+msgpack" :msgpack opts))
+  (transit-formatter "application/transit+msgpack" (assoc opts :fmt :msgpack)))
 
 ;;
-;; Utils
+;; List of built in formatters
 ;;
 
 (def formatters [:json :json-kw :yaml :yaml-kw :yaml-in-html :edn :clojure :transit-json :transit-msgpack])
