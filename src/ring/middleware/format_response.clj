@@ -56,34 +56,28 @@
 
 (defn wrap-format-response
   "Wraps a handler such that responses body to requests are formatted to
-  the right format. If no *Accept* header is found, use the first encoder.
+   the right format. If no *Accept* header is found, use the first encoder.
 
- + **:formats** list encoders, either Encoder instance of a keyword
-                 referring built-in Encoder
- + **:predicate** is a predicate taking the request and response as
-                  arguments to test if serialization should be used
- + **:charset** can be either a string representing a valid charset or a fn
-                taking the req as argument and returning a valid charset
-                (*utf-8* is strongly suggested)
- + **:handle-error** is a fn with a sig [exception request response]. Defaults
-                     to just rethrowing the Exception"
+   - :predicate - ...
+   - :handle-error - ...
+   - :formats - ...
+   - :*format-name* - ...
+     - :charset - ..."
   [handler & [{:keys [formats predicate handle-error]
                :or {formats formatters
                     predicate serializable?
                     handle-error default-handle-error}
                :as opts}]]
   (let [encoders (->> formats
-                     (map get-built-in-formatter)
-                     (filter encoder?)
-                     (map (partial init-encoder opts)))]
+                      (map (partial get-existing-formatter opts))
+                      (filter encoder?))]
     (assert (seq encoders))
     (fn [req]
       (let [{:keys [body] :as response} (handler req)]
         (try
           (if (predicate req response)
-            (let [encoder (or (preferred-encoder encoders req) (first encoders))
-                  encode-fn (:encode-fn encoder)
-                  [body* content-type] (encode-fn body req)]
+            (let [{:keys [encoder]} (or (preferred-encoder encoders req) (first encoders))
+                  [body* content-type] (encoder body req)]
               (-> response
                   (assoc :body (io/input-stream body*))
                   (res/content-type content-type)

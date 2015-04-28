@@ -12,49 +12,34 @@
 ;; Protocols
 ;;
 
-(defprotocol FormatDecoder
-  "Implementations should have at-least the following fields:
-  - name"
-  (create-decoder [_ opts]
-    "Should return a function which takes in request
-    (String) and returns decoded body.")
-  (decode? [_ req]
-    "Should return true if given request can be decoded by this decoder."))
+(defn make-formatter [{:keys [name content-type decoder decode? encoder]}]
+  {:pre [(keyword? name) (string? content-type)
+         (or (not decoder) (fn? decoder))
+         (or (not encoder) (fn? encoder))]}
+  {:name name
+   :content-type content-type
+   :enc-type (first (parse-accept-header content-type))
+   :decoder decoder
+   :decode? decode?
+   :encoder encoder})
 
 (defn decoder? [x]
-  (satisfies? FormatDecoder x))
-
-(defprotocol FormatEncoder
-  "Implementations should have at-least the following fields:
-  - name
-  - content-type
-
-  Following fields are added by the middleware:
-  - encoder, created by calling create-encoder with options
-  - enc-type, split content-type"
-  (create-encoder [_ opts]
-    "Should return a function which takes in body and request,
-    and returns [body content-type], where body is
-    encoded body as a ByteArray (or something which can be coerced
-    to InputStream.)"))
+  (boolean (:decoder x)))
 
 (defn encoder? [x]
-  (satisfies? FormatEncoder x))
+  (boolean (:encoder x)))
 
-(defn init-encoder [opts encoder]
-  {:pre [(string? (:content-type encoder))]}
-  (assoc encoder
-         :encode-fn (create-encoder encoder (get opts (:name encoder)))
-         :enc-type (first (parse-accept-header (:content-type encoder)))))
+(defmulti create-formatter (fn [k opts] k))
 
 ;;
 ;; Utils
 ;;
 
 (defn regexp-predicate
-  [^Pattern regexp req]
-  (if-let [^String type (get-content-type req)]
-    (and (:body req) (not (empty? (re-find regexp type))))))
+  [^Pattern regexp]
+  (fn [req]
+    (if-let [^String type (get-content-type req)]
+      (and (:body req) (not (empty? (re-find regexp type)))))))
 
 (defn charset-decoder [decoder-fn {:keys [charset]
                                    :or {charset get-or-guess-charset}}]
@@ -87,18 +72,21 @@
 ;; JSON
 ;;
 
-(defrecord JsonFormatter [name content-type kw?]
-  FormatDecoder
-  (create-decoder [_ opts]
-    (charset-decoder
-      #(json/parse-string % kw?)
-      opts))
-  (decode? [_ req]
-    (regexp-predicate #"^application/(vnd.+)?json" req))
+(defn json-formatter [name content-type {:keys [kw? pretty?] :as opts}]
+  (make-formatter
+    {:name name
+     :content-type content-type
+     :decoder (charset-decoder
+                #(json/parse-string % kw?)
+                opts)
+     :decode? (regexp-predicate #"^application/(vnd.+)?json")
+     :encoder (charset-encoder #(json/generate-string % {:pretty pretty?}) content-type opts)}))
 
-  FormatEncoder
-  (create-encoder [_ {:keys [pretty] :as opts}]
-    (charset-encoder #(json/generate-string % {:pretty pretty}) content-type opts)))
+(defmethod create-formatter :json [k opts]
+  (json-formatter k "application/json" opts))
+
+(defmethod create-formatter :json-kw [k opts]
+  (json-formatter k "application/json" (assoc opts :kw? true)))
 
 ;;
 ;; EDN
@@ -109,30 +97,27 @@
     (binding [*print-dup* true]
       (handler x))))
 
-(defrecord EdnFormatter [name content-type]
-  FormatDecoder
-  (create-decoder [_ opts]
-    (charset-decoder
-      (fn [#^String s]
-        (when-not (.isEmpty (.trim s))
-          (edn/read-string {:readers *data-readers*} s)))
-      opts))
-  (decode? [_ req]
-    (regexp-predicate #"^application/(vnd.+)?(x-)?(clojure|edn)" req))
+(defn edn-formatter [name content-type {:keys [hf] :as opts}]
+  (make-formatter
+    {:name name
+     :content-type content-type
+     :decoder (charset-decoder
+                (fn [#^String s]
+                  (when-not (.isEmpty (.trim s))
+                    (edn/read-string {:readers *data-readers*} s)))
+                opts)
+     :decode? (regexp-predicate #"^application/(vnd.+)?(x-)?(clojure|edn)")
 
-  FormatEncoder
-  (create-encoder [_ {:keys [hf] :as opts}]
-    (let [encode-fn (cond-> pr-str
-                            hf wrap-print-dup)]
-      (charset-encoder encode-fn content-type opts))))
+     :encoder (let [encode-fn (cond-> pr-str
+                                hf wrap-print-dup)]
+                (charset-encoder encode-fn content-type opts))}))
 
-; FIXME: Duplicate
-(defrecord EdnEncoder [name content-type]
-  FormatEncoder
-  (create-encoder [_ {:keys [hf] :as opts}]
-    (let [encode-fn (cond-> pr-str
-                            hf wrap-print-dup)]
-      (charset-encoder encode-fn content-type opts))))
+(defmethod create-formatter :edn [k opts]
+  (edn-formatter k "application/edn" opts))
+
+(defmethod create-formatter :clojure [k opts]
+  (-> (edn-formatter k "application/clojure" opts)
+      (dissoc :decoder)))
 
 ;;
 ;; YAML
@@ -145,76 +130,66 @@
       (handler body)
       "</pre></div></body></html>")))
 
-(defrecord YamlFormatter [name content-type kw?]
-  FormatDecoder
-  (create-decoder [_ opts]
-    (binding [yaml/*keywordize* kw?]
-      (charset-decoder yaml/parse-string opts)))
-  (decode? [_ req]
-    (regexp-predicate  #"^(application|text)/(vnd.+)?(x-)?yaml" req))
+(defn yaml-formatter [name content-type {:keys [html? kw?] :as opts}]
+  (make-formatter
+    {:name name
+     :content-type content-type
+     :decoder (binding [yaml/*keywordize* kw?]
+                (charset-decoder yaml/parse-string opts))
+     :decode? (regexp-predicate  #"^(application|text)/(vnd.+)?(x-)?yaml")
+     :encoder (charset-encoder (cond-> yaml/generate-string html? wrap-html) content-type opts)}))
 
-  FormatEncoder
-  (create-encoder [_ opts]
-    (charset-encoder yaml/generate-string content-type opts)))
+(defmethod create-formatter :yaml [k opts]
+  (yaml-formatter k "application/x-yaml" opts))
 
-(defrecord YamlEncoder [name content-type html?]
-  FormatEncoder
-  (create-encoder [_ opts]
-    (let [encode-fn (cond-> yaml/generate-string
-                            html? wrap-html)]
-      (charset-encoder encode-fn content-type opts))))
+(defmethod create-formatter :yaml-kw [k opts]
+  (yaml-formatter k "application/x-yaml" (assoc opts :kw? true)))
+
+(defmethod create-formatter :yaml-in-html [k opts]
+  (-> (yaml-formatter k "text/html" (assoc opts :html? true))
+      (dissoc :decoder)))
 
 ;;
 ;; Transit
 ;;
 
-(defrecord TransitFormatter [name content-type fmt]
-  FormatDecoder
-  (create-decoder [_ opts]
-    (binary-decoder
-      (fn [in]
-        (let [rdr (transit/reader in fmt (select-keys opts [:handlers :default-handler]))]
-          (transit/read rdr)))))
-  (decode? [_ req]
-    (regexp-predicate
-      (case fmt
-       :json #"^application/(vnd.+)?(x-)?transit\+json"
-       :msgpack #"^application/(vnd.+)?(x-)?transit\+msgpack")
-      req))
+(defn transit-formatter [name content-type fmt {:keys [verbose] :as opts}]
+  (make-formatter
+    {:name name
+     :content-type content-type
+     :decoder (binary-decoder
+                (fn [in]
+                  (let [rdr (transit/reader in fmt (select-keys opts [:handlers :default-handler]))]
+                    (transit/read rdr))))
+     :decode? (regexp-predicate
+                (case fmt
+                  :json #"^application/(vnd.+)?(x-)?transit\+json"
+                  :msgpack #"^application/(vnd.+)?(x-)?transit\+msgpack"))
+     :encoder (binary-encoder
+                (fn [data]
+                  (let [out (ByteArrayOutputStream.)
+                        full-fmt (if (and (= fmt :json) verbose)
+                                   :json-verbose
+                                   fmt)
+                        wrt (transit/writer out full-fmt (select-keys opts [:handlers]))]
+                    (transit/write wrt data)
+                    (.toByteArray out)))
+                content-type
+                opts)}))
 
-  FormatEncoder
-  (create-encoder [_ {:keys [verbose] :as opts}]
-    (binary-encoder
-      (fn [data]
-        (let [out (ByteArrayOutputStream.)
-              full-fmt (if (and (= fmt :json) verbose)
-                         :json-verbose
-                         fmt)
-              wrt (transit/writer out full-fmt (select-keys opts [:handlers]))]
-          (transit/write wrt data)
-          (.toByteArray out)))
-      content-type
-      opts)))
+(defmethod create-formatter :transit-json [k opts]
+  (transit-formatter k "application/transit+json" :json opts))
+
+(defmethod create-formatter :transit-msgpack [k opts]
+  (transit-formatter k "application/transit+msgpack" :msgpack opts))
 
 ;;
-;; Formatter list
+;; Utils
 ;;
 
-(def formatters
-  [(JsonFormatter.    :json            "application/json" false)
-   (JsonFormatter.    :json-kw         "application/json" true)
-   (EdnFormatter.     :edn             "application/edn")
-   (EdnEncoder.       :clojure         "application/clojure")
-   (YamlFormatter.    :yaml            "application/x-yaml" false)
-   (YamlFormatter.    :yaml-kw         "application/x-yaml" true)
-   (YamlEncoder.      :yaml-in-html    "text/html" true)
-   (TransitFormatter. :transit-json    "application/transit+json" :json)
-   (TransitFormatter. :transit-msgpack "application/transit+msgpack" :msgpack)])
+(def formatters [:json :json-kw :yaml :yaml-kw :yaml-in-html :edn :clojure :transit-json :transit-msgpack])
 
-(def formatters-map
-  (into {} (map (juxt :name identity) formatters)))
-
-(defn get-built-in-formatter [x]
-  (if (keyword? x)
-    (get formatters-map x)
-    x))
+(defn get-existing-formatter [opts k]
+  (if (keyword? k)
+    (create-formatter k (get opts k))
+    k))

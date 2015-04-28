@@ -93,7 +93,7 @@
 (deftest format-json-prettily
   (let [body {:foo "bar"}
         req {:body body}
-        resp ((wrap-format-response identity {:formats [:json-kw], :json-kw {:pretty true}}) req)]
+        resp ((wrap-format-response identity {:formats [:json-kw], :json-kw {:pretty? true}}) req)]
     (is (.contains (slurp (:body resp)) "\n "))))
 
 (deftest returns-correct-charset
@@ -168,16 +168,16 @@
 (def restful-echo
   (wrap-format-response echo-with-default-body))
 
-(defrecord SafeEncoder [name content-type]
-  FormatEncoder
-  (create-encoder [_ opts]
-    (fn [_ _]
-      (throw (RuntimeException. "Memento mori")))))
+(def safe-encoder
+  (make-formatter
+    {:name :safe
+     :content-type "foo/bar"
+     :encoder (fn [_ _] (throw (RuntimeException. "Memento mori")))}))
 
 (def safe-restful-echo
   (wrap-format-response echo-with-default-body
                         {:handle-error (fn [_ _ _] {:status 500})
-                         :formats [(SafeEncoder. :safe "foo/bar")]}))
+                         :formats [safe-encoder]}))
 
 (deftest format-hashmap-to-preferred
   (let [ok-accept "application/edn, application/json;q=0.5"
@@ -207,14 +207,15 @@
       (is (= "application/json" (file-type (get-in resp [:headers "Content-Type"]))))
       (is (< 2 (Integer/parseInt (get-in resp [:headers "Content-Length"])))))))
 
-(defrecord CustomEncoder [name content-type]
-  FormatEncoder
-  (create-encoder [_ _]
-    (fn [_ _]
-      [(.getBytes "foobar") content-type])))
+(def custom-encoder
+  (make-formatter
+    {:name :custom
+     :content-type "text/foo"
+     :encoder (fn [_ _]
+                [(.getBytes "foobar") "text/foo"])}))
 
 (def custom-restful-echo
-  (wrap-format-response identity {:formats [(CustomEncoder. :custom "text/foo")]}))
+  (wrap-format-response identity {:formats [custom-encoder]}))
 
 (deftest format-custom-restful-hashmap
   (let [req {:body {:foo "bar"} :headers {"accept" "text/foo"}}
