@@ -93,7 +93,7 @@
 (deftest format-json-prettily
   (let [body {:foo "bar"}
         req {:body body}
-        resp ((wrap-format-response identity {:formats [:json-kw], :json-kw {:pretty? true}}) req)]
+        resp ((wrap-format-response identity {:formats [:json-kw], :opts {:json-kw {:pretty? true}}}) req)]
     (is (.contains (slurp (:body resp)) "\n "))))
 
 (deftest returns-correct-charset
@@ -244,7 +244,7 @@
   {Point (transit/write-handler (constantly "Point") (fn [p] [(:x p) (:y p)]))})
 
 (def custom-transit-echo
-  (wrap-format-response identity {:formats [:transit-json], :transit-json {:writer-opts {:handlers writers}}}))
+  (wrap-format-response identity {:formats [:transit-json], :opts {:transit-json {:writer-opts {:handlers writers}}}}))
 
 (deftest write-custom-transit
   (let [req {:body (Point. 1 2)}

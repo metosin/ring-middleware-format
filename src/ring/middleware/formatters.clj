@@ -74,27 +74,31 @@
    Uses cheshire.
 
    Available options:
-   - :kw - Passed to cheshire as key-fn parameter. If true,
-   property names will be keywordizes. Can be a function.
+   - :kw - Passed to parse-string as key-fn parameter.
+   If true, property names will be keywordizes. Can be a function.
+   - :encode-key-fn - Passed to generate-string as :key-fn option.
    - :pretty? - If true, the output will be pretty printed.
 
    By default registered with following keys:
    - :json
    - :json-kw - Sets the :kw option to true."
-  [content-type {:keys [kw pretty?] :as opts}]
+  [content-type {:keys [kw pretty? encode-key-fn] :as opts}]
   (make-formatter
     {:content-type content-type
      :decoder (charset-decoder
                 #(json/parse-string % kw)
                 opts)
      :decode? (regexp-predicate #"^application/(vnd.+)?json")
-     :encoder (charset-encoder #(json/generate-string % {:pretty pretty?}) content-type opts)}))
+     :encoder (charset-encoder (let [o (cond-> {:pretty pretty?}
+                                         encode-key-fn (assoc :key-fn encode-key-fn))]
+                                 #(json/generate-string % o))
+                               content-type opts)}))
 
 (defmethod create-formatter :json [_ opts]
   (json-formatter "application/json" opts))
 
 (defmethod create-formatter :json-kw [_ opts]
-  (json-formatter "application/json" (assoc opts :kw true)))
+  (json-formatter "application/json" (merge {:kw true} opts)))
 
 ;;
 ;; EDN
@@ -231,5 +235,5 @@
 
 (defn get-existing-formatter [opts k]
   (if (keyword? k)
-    (create-formatter k (get opts k))
+    (create-formatter k (merge (select-keys opts [:charset]) (get (:opts opts) k)))
     k))
