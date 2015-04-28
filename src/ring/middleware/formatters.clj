@@ -12,12 +12,15 @@
 ;; Protocols
 ;;
 
-(defn make-formatter [{:keys [name content-type decoder decode? encoder]}]
-  {:pre [(keyword? name) (string? content-type)
-         (or (not decoder) (fn? decoder))
-         (or (not encoder) (fn? encoder))]}
-  {:name name
-   :content-type content-type
+(defn make-formatter
+  "Creates an instance of formatter.
+
+   "
+  [{:keys [content-type decoder decode? encoder]}]
+  {:pre [(string? content-type)
+         (if decoder (and (fn? decoder) (fn? decode?)) true)
+         (if encoder (fn? encoder) true)]}
+  {:content-type content-type
    :enc-type (first (parse-accept-header content-type))
    :decoder decoder
    :decode? decode?
@@ -72,21 +75,32 @@
 ;; JSON
 ;;
 
-(defn json-formatter [name content-type {:keys [kw? pretty?] :as opts}]
+(defn json-formatter
+  "JSON Formatter.
+   Uses cheshire.
+
+   Available options:
+   - :kw - Passed to cheshire as key-fn parameter. If true,
+   property names will be keywordizes. Can be a function.
+   - :pretty? - If true, the output will be pretty printed.
+
+   By default registered with following keys:
+   - :json
+   - :json-kw - Sets the :kw option to true."
+  [content-type {:keys [kw pretty?] :as opts}]
   (make-formatter
-    {:name name
-     :content-type content-type
+    {:content-type content-type
      :decoder (charset-decoder
-                #(json/parse-string % kw?)
+                #(json/parse-string % kw)
                 opts)
      :decode? (regexp-predicate #"^application/(vnd.+)?json")
      :encoder (charset-encoder #(json/generate-string % {:pretty pretty?}) content-type opts)}))
 
-(defmethod create-formatter :json [k opts]
-  (json-formatter k "application/json" opts))
+(defmethod create-formatter :json [_ opts]
+  (json-formatter "application/json" opts))
 
-(defmethod create-formatter :json-kw [k opts]
-  (json-formatter k "application/json" (assoc opts :kw? true)))
+(defmethod create-formatter :json-kw [_ opts]
+  (json-formatter "application/json" (assoc opts :kw true)))
 
 ;;
 ;; EDN
@@ -97,10 +111,19 @@
     (binding [*print-dup* true]
       (handler x))))
 
-(defn edn-formatter [name content-type {:keys [hf] :as opts}]
+(defn edn-formatter
+  "EDN Formatter.
+   Uses clojure.tools.reader.edn.
+
+   Available options:
+   - :hf? - If true, sets *print-dup* to true.
+
+   Registered with following keys:
+   - :edn
+   - :clojure - Read only format with \"application/clojure\" content-type."
+  [content-type {:keys [hf?] :as opts}]
   (make-formatter
-    {:name name
-     :content-type content-type
+    {:content-type content-type
      :decoder (charset-decoder
                 (fn [#^String s]
                   (when-not (.isEmpty (.trim s))
@@ -109,14 +132,14 @@
      :decode? (regexp-predicate #"^application/(vnd.+)?(x-)?(clojure|edn)")
 
      :encoder (let [encode-fn (cond-> pr-str
-                                hf wrap-print-dup)]
+                                hf? wrap-print-dup)]
                 (charset-encoder encode-fn content-type opts))}))
 
-(defmethod create-formatter :edn [k opts]
-  (edn-formatter k "application/edn" opts))
+(defmethod create-formatter :edn [_ opts]
+  (edn-formatter "application/edn" opts))
 
-(defmethod create-formatter :clojure [k opts]
-  (-> (edn-formatter k "application/clojure" opts)
+(defmethod create-formatter :clojure [_ opts]
+  (-> (edn-formatter "application/clojure" opts)
       (dissoc :decoder)))
 
 ;;
@@ -130,36 +153,60 @@
       (handler body)
       "</pre></div></body></html>")))
 
-(defn yaml-formatter [name content-type {:keys [html? kw?] :as opts}]
+(defn yaml-formatter
+  "YAML Formatter.
+
+   Available options
+   - :kw? - If true, property names are converted to keywords.
+   - :html? - If true, output is wrapped in html document.
+
+   Registered with following keys:
+   - :yaml
+   - :yaml-kw - Sets the :kw? option to true.
+   - :yaml-in-html - Read only format with content-type \"text/html\". Sets :html? to true."
+  [content-type {:keys [html? kw?] :as opts}]
   (make-formatter
-    {:name name
-     :content-type content-type
+    {:content-type content-type
      :decoder (binding [yaml/*keywordize* kw?]
                 (charset-decoder yaml/parse-string opts))
      :decode? (regexp-predicate  #"^(application|text)/(vnd.+)?(x-)?yaml")
      :encoder (charset-encoder (cond-> yaml/generate-string html? wrap-html) content-type opts)}))
 
-(defmethod create-formatter :yaml [k opts]
-  (yaml-formatter k "application/x-yaml" opts))
+(defmethod create-formatter :yaml [_ opts]
+  (yaml-formatter "application/x-yaml" opts))
 
-(defmethod create-formatter :yaml-kw [k opts]
-  (yaml-formatter k "application/x-yaml" (assoc opts :kw? true)))
+(defmethod create-formatter :yaml-kw [_ opts]
+  (yaml-formatter "application/x-yaml" (assoc opts :kw? true)))
 
-(defmethod create-formatter :yaml-in-html [k opts]
-  (-> (yaml-formatter k "text/html" (assoc opts :html? true))
+(defmethod create-formatter :yaml-in-html [_ opts]
+  (-> (yaml-formatter "text/html" (assoc opts :html? true))
       (dissoc :decoder)))
 
 ;;
 ;; Transit
 ;;
 
-(defn transit-formatter [name content-type fmt {:keys [verbose] :as opts}]
+(defn transit-formatter
+  "Transit formatter.
+
+   Available options:
+   - :reader-opts - passed to transit/reader
+     - :handlers
+     - :default-handler
+   - :writer-opts - passed to transit/writer
+     - :handlers
+
+   Registered with following keys:
+   - :transit-json
+   - :transit-msgpack
+
+   Check http://cognitect.github.io/transit-clj/ for more info."
+  [content-type fmt {:keys [verbose reader-opts writer-opts] :as opts}]
   (make-formatter
-    {:name name
-     :content-type content-type
+    {:content-type content-type
      :decoder (binary-decoder
                 (fn [in]
-                  (let [rdr (transit/reader in fmt (select-keys opts [:handlers :default-handler]))]
+                  (let [rdr (transit/reader in fmt reader-opts)]
                     (transit/read rdr))))
      :decode? (regexp-predicate
                 (case fmt
@@ -171,17 +218,17 @@
                         full-fmt (if (and (= fmt :json) verbose)
                                    :json-verbose
                                    fmt)
-                        wrt (transit/writer out full-fmt (select-keys opts [:handlers]))]
+                        wrt (transit/writer out full-fmt writer-opts)]
                     (transit/write wrt data)
                     (.toByteArray out)))
                 content-type
                 opts)}))
 
-(defmethod create-formatter :transit-json [k opts]
-  (transit-formatter k "application/transit+json" :json opts))
+(defmethod create-formatter :transit-json [_ opts]
+  (transit-formatter "application/transit+json" :json opts))
 
-(defmethod create-formatter :transit-msgpack [k opts]
-  (transit-formatter k "application/transit+msgpack" :msgpack opts))
+(defmethod create-formatter :transit-msgpack [_ opts]
+  (transit-formatter "application/transit+msgpack" :msgpack opts))
 
 ;;
 ;; Utils

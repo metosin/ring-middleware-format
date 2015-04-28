@@ -185,7 +185,7 @@
   {"Point" (transit/read-handler (fn [[x y]] (Point. x y)))})
 
 (def custom-transit-json-echo
-  (wrap-format-params identity {:formats [:transit-json], :transit-json {:handlers readers}}))
+  (wrap-format-params identity {:formats [:transit-json], :transit-json {:reader-opts {:handlers readers}}}))
 
 (deftest read-custom-transit
   (let [body "[\"^ \", \"~:p\", [\"~#Point\",[1,2]]]"
