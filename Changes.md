@@ -1,5 +1,14 @@
 # Changes for ring-middleware-format
 
+## x.x.x (x.x.2015)
+
+- Updated dependencies:
+```
+[org.clojure/tools.reader "0.9.2"] is available but we use "0.8.15"
+[com.ibm.icu/icu4j "55.1"] is available but we use "54.1.1"
+[com.cognitect/transit-clj "0.8.271"] is available but we use "0.8.269"
+```
+
 ## 0.6.0 (2.3.2015)
 
 - **Breaking change**: All wrap-\* functions now take options as optional map instead of
