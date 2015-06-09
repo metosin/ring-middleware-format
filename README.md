@@ -37,7 +37,7 @@ To get automatic deserialization and serialization for all supported formats wit
 ```
 `wrap-restful-format` accepts an optional `:formats` parameter, which is a list of the formats that should be handled. The first format of the list is also the default serializer used when no other solution can be found. The defaults are:
 ```clojure
-(wrap-restful-format handler :formats [:json :edn :yaml :yaml-in-html :transit-json :transit-msgpack])
+(wrap-restful-format handler {:formats [:json :edn :yaml :yaml-in-html :transit-json :transit-msgpack]})
 ```
 
 The available formats are:
