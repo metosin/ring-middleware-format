@@ -57,7 +57,7 @@ mostly). If a route returns a _String_, _File_, _InputStream_ or _nil_, nothing 
 
 Please note the default JSON and YAML decoder do not keywordize their output keys, if this is the behaviour you want (be careful about keywordizing user input!), you should use something like:
 ```clojure
-(wrap-restful-format handler :formats [:json-kw :edn :yaml-kw :yaml-in-html :transit-json :transit-msgpack])
+(wrap-restful-format handler {:formats [:json-kw :edn :yaml-kw :yaml-in-html :transit-json :transit-msgpack]})
 ```
 
 See also [wrap-restful-format](http://metosin.github.com/ring-middleware-format/ring.middleware.format.html#var-wrap-restful-format) docstring for help on customizing error handling.
