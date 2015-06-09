@@ -10,12 +10,12 @@
   :dependencies [[org.clojure/clojure "1.6.0"]
                  [org.clojure/core.memoize "0.5.7"]
                  [ring "1.3.2"]
-                 [cheshire "5.4.0"]
+                 [cheshire "5.5.0"]
                  [org.clojure/tools.reader "0.9.2"]
                  [com.ibm.icu/icu4j "55.1"]
                  [clj-yaml "0.4.0"]
-                 [com.cognitect/transit-clj "0.8.271"]]
-  :plugins [[codox "0.8.10"]]
+                 [com.cognitect/transit-clj "0.8.275"]]
+  :plugins [[codox "0.8.12"]]
   :codox {:src-dir-uri "http://github.com/metosin/ring-middleware-format/blob/master/"
           :src-linenum-anchor-prefix "L"
           :defaults {:doc/format :markdown}}
