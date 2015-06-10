@@ -12,6 +12,7 @@
                  [ring "1.3.2"]
                  [cheshire "5.5.0"]
                  [org.clojure/tools.reader "0.9.2"]
+                 [com.google.guava/guava "18.0"]
                  [com.ibm.icu/icu4j "55.1"]
                  [clj-yaml "0.4.0"]
                  [clojure-msgpack "1.1.0"]
